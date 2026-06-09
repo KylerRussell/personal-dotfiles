@@ -10,8 +10,8 @@ echo "=========================================="
 # Download and extract the latest tarball
 curl -L https://github.com/KylerRussell/personal-dotfiles/archive/refs/heads/main.tar.gz | tar -xz
 
-# Navigate to the tactical-dotfiles folder
-cd personal-dotfiles-main/tactical-dotfiles || exit 1
+# Navigate to the repository folder
+cd personal-dotfiles-main || exit 1
 
 # Make install.sh executable and run it
 chmod +x install.sh

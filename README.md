@@ -5,9 +5,10 @@ A modular, tech-brutalism configuration for Hyprland, Kitty, and Waybar. Designe
 ## Repository Blueprint
 
 ```text
-tactical-dotfiles/
+personal-dotfiles/
 ├── README.md               # Setup documentation & package dependencies
 ├── install.sh              # One-click deployment script
+├── update.sh               # One-click updates & sync
 └── dotfiles/               # Maps directly to ~/.config/
     ├── hypr/
     │   ├── hyprland.conf   # Main entry point
@@ -38,8 +39,8 @@ To ensure all bindings and components launch correctly, install the following pa
 Clone this repository and run the automated deployment script:
 
 ```bash
-git clone <repository-url>
-cd tactical-dotfiles
+git clone https://github.com/KylerRussell/personal-dotfiles.git
+cd personal-dotfiles
 chmod +x install.sh
 ./install.sh
 ```
