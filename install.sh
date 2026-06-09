@@ -57,7 +57,7 @@ for config in hypr kitty waybar; do
         echo "Mapping: $config -> $TARGET_DIR/$config"
         # Remove old configs or ML4W remnants safely
         rm -rf "$TARGET_DIR/$config"
-        ln -sf "$REPO_DIR/$config" "$TARGET_DIR/"
+        ln -sfn "$REPO_DIR/$config" "$TARGET_DIR/$config"
     fi
 done
 
