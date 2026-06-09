@@ -61,4 +61,12 @@ for config in hypr kitty waybar; do
     fi
 done
 
+# Map the update script to home directory for easy execution
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/update.sh" ]; then
+    echo "Mapping: update.sh -> $HOME/update.sh"
+    ln -sfn "$SCRIPT_DIR/update.sh" "$HOME/update.sh"
+    chmod +x "$HOME/update.sh"
+fi
+
 echo "Deployment complete. Reload Hyprland with SUPER+M or reboot."
