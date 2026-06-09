@@ -1,0 +1,47 @@
+/* Stark Monospace Waybar Styling */
+
+* {
+    border: none;
+    border-radius: 0;
+    font-family: "JetBrains Mono", "Cascadia Code", monospace;
+    font-size: 11px;
+    min-height: 0;
+}
+
+window#waybar {
+    background: #18181b;
+    border-bottom: 1px solid #27272a;
+    color: #e4e4e7;
+    transition-property: background-color;
+    transition-duration: .5s;
+}
+
+#workspaces button {
+    padding: 0 5px;
+    background: transparent;
+    color: #a1a1aa;
+    border-bottom: 2px solid transparent;
+}
+
+#workspaces button.active {
+    background: #27272a;
+    color: #ffffff;
+    border-bottom: 2px solid #a1a1aa;
+}
+
+#clock,
+#cpu,
+#memory,
+#tray {
+    padding: 0 10px;
+    color: #e4e4e7;
+}
+
+#cpu {
+    background: #27272a;
+    color: #ffffff;
+}
+
+#memory {
+    background: #18181b;
+}
