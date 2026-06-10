@@ -102,6 +102,7 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$SCRIPT_DIR/update.sh" ]; then
     echo "Mapping: update.sh -> home directory (standalone copy)"
+    rm -f "$HOME/update.sh"   # drop any old symlink so cp can't hit "same file"
     cp -f "$SCRIPT_DIR/update.sh" "$HOME/update.sh"
     chmod +x "$HOME/update.sh"
 fi
