@@ -9,4 +9,4 @@ case "$d" in
     *)       s=th ;;
 esac
 printf '<span font="Barlow Condensed Bold 96" foreground="#3a3a3a">%s</span>\n' "$(date +%H:%M)"
-printf '<span font="Barlow Condensed 22" foreground="#8a8a8a">%s %d%s %s</span>' "$(date +%B)" "$d" "$s" "$(date +%Y)"
+printf '<span font="Barlow Condensed 22" foreground="#8a8a8a">%s %d%s %s</span>\n' "$(date +%B)" "$d" "$s" "$(date +%Y)"
