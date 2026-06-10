@@ -1,0 +1,9 @@
+# Wallpapers are generated locally by wallpaper-generators/ and are intentionally
+# NOT committed. This way update.sh can never restore a stale image over one you
+# just regenerated. Run the generators (see wallpaper-generators/README.md) to
+# (re)create them — they write into the folder below.
+dotfiles/hypr/wallpapers/*.png
+
+# Python caches
+__pycache__/
+*.pyc
