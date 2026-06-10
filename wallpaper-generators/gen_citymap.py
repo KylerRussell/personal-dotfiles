@@ -70,3 +70,8 @@ ax.set_ylim(cy-half, cy+half)
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 fig.savefig(OUT, facecolor=BG, dpi=100)
 print("wrote", os.path.abspath(OUT))
+
+# Flatten RGBA -> RGB: conky's ${image} renders alpha images as a white box
+# on transparent ARGB windows. A plain-RGB PNG renders correctly.
+from PIL import Image as _PILImage
+_PILImage.open(OUT).convert("RGB").save(OUT)
