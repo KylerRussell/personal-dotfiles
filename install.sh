@@ -54,17 +54,16 @@ FONT_DIR="$HOME/.local/share/fonts"
 if [ ! -f "$FONT_DIR/BarlowCondensed-Bold.ttf" ]; then
     echo "Installing Barlow Condensed font..."
     mkdir -p "$FONT_DIR"
-    FONT_URL="https://fonts.google.com/download?family=Barlow+Condensed"
-    FONT_TMP="/tmp/barlow_condensed.zip"
+    FONT_BASE="https://raw.githubusercontent.com/jpt/barlow/main/fonts/ttf"
     if command -v curl &> /dev/null; then
-        curl -sL "$FONT_URL" -o "$FONT_TMP" 2>/dev/null
-        if [ -f "$FONT_TMP" ]; then
-            unzip -qo "$FONT_TMP" -d "$FONT_DIR/" 2>/dev/null
-            rm -f "$FONT_TMP"
-            fc-cache -f "$FONT_DIR" 2>/dev/null
+        curl -sL "$FONT_BASE/BarlowCondensed-Bold.ttf" -o "$FONT_DIR/BarlowCondensed-Bold.ttf"
+        curl -sL "$FONT_BASE/BarlowCondensed-Regular.ttf" -o "$FONT_DIR/BarlowCondensed-Regular.ttf"
+        curl -sL "$FONT_BASE/BarlowCondensed-Light.ttf" -o "$FONT_DIR/BarlowCondensed-Light.ttf"
+        fc-cache -f "$FONT_DIR" 2>/dev/null
+        if fc-list | grep -qi barlow; then
             echo "Barlow Condensed font installed."
         else
-            echo "Warning: Could not download Barlow Condensed. Clock may use fallback font."
+            echo "Warning: Font files downloaded but fc-cache did not register them."
         fi
     else
         echo "Warning: curl not found. Skipping font download."
