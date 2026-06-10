@@ -16,7 +16,10 @@ import rioxarray  # noqa: enables the .rio accessor
 
 BG="#e9e7e2"; LINE="#bdb9b0"; INDEX="#a39e94"; RED="#d9512f"
 CENTER=(39.0997, -94.5786)               # lat, lon
-W,S,E,N = -94.72, 38.97, -94.40, 39.22   # bbox west,south,east,north
+# bbox centred on KC and sized to the right-panel aspect (1280x1080) so the
+# contours fill it edge-to-edge instead of sitting as a square block in the middle.
+_DLAT=0.125; _DLON=0.1906
+W,S,E,N = CENTER[1]-_DLON, CENTER[0]-_DLAT, CENTER[1]+_DLON, CENTER[0]+_DLAT
 OUT=os.path.join(os.path.dirname(os.path.abspath(__file__)),"..","dotfiles","hypr","wallpapers","topography.png")
 
 print("downloading USGS 3DEP elevation ...")
@@ -31,9 +34,9 @@ fig=plt.figure(figsize=(12.8,10.8),dpi=100); fig.patch.set_facecolor(BG)
 ax=fig.add_axes([0,0,1,1]); ax.set_facecolor(BG); ax.axis("off")
 ax.set_aspect(1/np.cos(np.radians(CENTER[0])))   # geographic aspect correction
 
-lv=np.linspace(zmin, zmax, 40)
+lv=np.linspace(zmin, zmax, 24)
 ax.contour(x, y, z, levels=lv,      colors=LINE,  linewidths=0.4, zorder=2)
-ax.contour(x, y, z, levels=lv[::5], colors=INDEX, linewidths=0.8, zorder=3)
+ax.contour(x, y, z, levels=lv[::4], colors=INDEX, linewidths=0.7, zorder=3)
 
 try:
     print("downloading rivers ...")
