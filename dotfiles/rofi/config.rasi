@@ -1,0 +1,77 @@
+/** Stark Tech-Brutalism Rofi Theme Config **/
+
+configuration {
+    font: "JetBrains Mono 10";
+    show-icons: false;
+    drun-display-format: "{name}";
+    disable-history: true;
+}
+
+* {
+    /* Color Palette */
+    bg-color:      #09090b; /* Obsidian black */
+    fg-color:      #e4e4e7; /* Cold zinc white */
+    border-color:  #27272a; /* Muted obsidian gray */
+    accent-color:  #a1a1aa; /* Highlight gray */
+    select-bg:     #27272a; /* Selection background */
+    select-fg:     #ffffff; /* Selected text color */
+
+    background-color: @bg-color;
+    text-color:       @fg-color;
+    spacing:          0;
+}
+
+window {
+    width:            480px;
+    border:           2px;
+    border-color:     @accent-color;
+    padding:          15px;
+    background-color: @bg-color;
+}
+
+mainbox {
+    border:  0;
+    padding: 0;
+}
+
+inputbar {
+    border:           0 0 2px 0;
+    border-color:     @border-color;
+    padding:          0 0 10px 0;
+    margin:           0 0 10px 0;
+    children:         [ prompt, entry ];
+}
+
+prompt {
+    padding:          0 10px 0 0;
+    text-color:       @accent-color;
+}
+
+entry {
+    placeholder:      "Run Command...";
+    placeholder-color: #52525b;
+}
+
+listview {
+    fixed-height:     0;
+    border:           0;
+    scrollbar:        false;
+    lines:            8;
+}
+
+element {
+    padding:          8px;
+    border:           0;
+}
+
+element-text {
+    background-color: transparent;
+    text-color:       inherit;
+}
+
+element selected {
+    background-color: @select-bg;
+    text-color:       @select-fg;
+    border:           1px;
+    border-color:     @accent-color;
+}

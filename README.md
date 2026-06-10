@@ -12,15 +12,18 @@ personal-dotfiles/
 └── dotfiles/               # Maps directly to ~/.config/
     ├── hypr/
     │   ├── hyprland.conf   # Main entry point
+    │   ├── hud.py          # Tactical Anduril-inspired telemetry HUD
     │   └── configs/
     │       ├── binds.conf  # Keymaps, window controls, navigation
     │       ├── rules.conf  # Rigid window behaviors & layout locking
     │       └── theme.conf  # Vector graphics, sharp borders, zero shadows
     ├── kitty/
     │   └── kitty.conf      # Stark, highly legible developer terminal
-    └── waybar/
-        ├── config.jsonc    # System telemetry layout
-        └── style.css       # Monospace styling sheet
+    ├── waybar/
+    │   ├── config.jsonc    # System telemetry layout
+    │   └── style.css       # Monospace styling sheet
+    └── rofi/
+        └── config.rasi     # Stark, zero-rounding application launcher
 ```
 
 ## System Requirements & Dependencies
