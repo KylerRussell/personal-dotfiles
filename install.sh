@@ -25,6 +25,7 @@ if command -v pacman &> /dev/null; then
         ttf-jetbrains-mono
         otf-font-awesome
         python-gobject
+        python-cairo
         gtk3
         gtk-layer-shell
         wlr-randr
