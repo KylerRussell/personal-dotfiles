@@ -1,0 +1,9 @@
+/* nwg-wrapper HUD — fully transparent surface.
+   All colour, size and weight come from the Pango markup in the scripts,
+   so this file only needs to clear the widget background. */
+window {
+    background-color: rgba(0, 0, 0, 0);
+}
+label {
+    background-color: rgba(0, 0, 0, 0);
+}

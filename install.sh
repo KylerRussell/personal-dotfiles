@@ -24,6 +24,12 @@ if command -v pacman &> /dev/null; then
         vulkan-tools
         ttf-jetbrains-mono
         otf-font-awesome
+        python-gobject
+        gtk3
+        gtk-layer-shell
+        wlr-randr
+        python-pip
+        git
     )
 
     # Check which packages are missing
@@ -84,10 +90,29 @@ else
     echo "Barlow Condensed font already installed."
 fi
 
+# Install nwg-wrapper (layer-shell HUD widget, the conky replacement) from source.
+if ! command -v nwg-wrapper &> /dev/null; then
+    echo "Installing nwg-wrapper from source..."
+    NWG_TMP="/tmp/nwg-wrapper-src"
+    rm -rf "$NWG_TMP"
+    if command -v git &> /dev/null && git clone --depth 1 https://github.com/nwg-piotr/nwg-wrapper.git "$NWG_TMP" &> /dev/null; then
+        if ( cd "$NWG_TMP" && pip install --break-system-packages . &> /dev/null ); then
+            echo "nwg-wrapper installed."
+        else
+            echo "Warning: nwg-wrapper build failed (needs python-gobject + gtk-layer-shell)."
+        fi
+        rm -rf "$NWG_TMP"
+    else
+        echo "Warning: could not fetch nwg-wrapper (git/network)."
+    fi
+else
+    echo "nwg-wrapper already installed."
+fi
+
 mkdir -p "$TARGET_DIR"
 
 # Loop through configurations and generate absolute links
-for config in hypr kitty rofi conky; do
+for config in hypr kitty rofi conky nwg-wrapper; do
     if [ -d "$REPO_DIR/$config" ]; then
         echo "Mapping: $config -> $TARGET_DIR/$config"
         # Remove old configs safely
@@ -95,6 +120,9 @@ for config in hypr kitty rofi conky; do
         ln -sfn "$REPO_DIR/$config" "$TARGET_DIR/$config"
     fi
 done
+
+# HUD widget scripts must be executable
+chmod +x "$TARGET_DIR"/nwg-wrapper/*.sh 2>/dev/null
 
 # Copy (do NOT symlink) the update script to the home directory. A symlink here
 # points back into the repo tree that update.sh itself overwrites while running,
