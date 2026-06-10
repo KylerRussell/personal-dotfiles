@@ -1,0 +1,8 @@
+# globe (offline, uses bundled data/naturalearth_lowres.shp)
+pyshp
+matplotlib
+numpy
+# city map (needs internet: OpenStreetMap via osmnx)
+osmnx
+# topography (needs internet: USGS 3DEP elevation + OSM rivers)
+py3dep
