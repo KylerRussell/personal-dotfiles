@@ -17,7 +17,7 @@ if command -v pacman &> /dev/null; then
         hyprland
         kitty
         rofi-wayland
-        hyprpaper
+        swaybg
         conky
         mesa
         vulkan-swrast
