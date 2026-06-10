@@ -11,7 +11,7 @@ echo "=========================================="
 # Check if pacman is available (Arch Linux check)
 if command -v pacman &> /dev/null; then
     echo "Arch Linux detected. Checking dependencies..."
-    
+
     # List of required packages
     PACKAGES=(
         hyprland
@@ -25,7 +25,7 @@ if command -v pacman &> /dev/null; then
         ttf-jetbrains-mono
         otf-font-awesome
     )
-    
+
     # Check which packages are missing
     MISSING_PACKAGES=()
     for pkg in "${PACKAGES[@]}"; do
@@ -33,14 +33,16 @@ if command -v pacman &> /dev/null; then
             MISSING_PACKAGES+=("$pkg")
         fi
     done
-    
+
     if [ ${#MISSING_PACKAGES[@]} -gt 0 ]; then
         echo "Installing missing packages: ${MISSING_PACKAGES[*]}"
-        # If not root, prepend sudo
+        # Do a FULL system upgrade alongside the install. Installing onto a
+        # refreshed DB without upgrading (`pacman -Sy pkg`) is a partial upgrade
+        # and can pull a newer mesa/libdrm than the running system -> broken EGL.
         if [ "$EUID" -ne 0 ]; then
-            sudo pacman -Sy --noconfirm "${MISSING_PACKAGES[@]}"
+            sudo pacman -Syu --noconfirm "${MISSING_PACKAGES[@]}"
         else
-            pacman -Sy --noconfirm "${MISSING_PACKAGES[@]}"
+            pacman -Syu --noconfirm "${MISSING_PACKAGES[@]}"
         fi
     else
         echo "All core packages are already installed."
@@ -94,11 +96,13 @@ for config in hypr kitty rofi conky; do
     fi
 done
 
-# Map the update script to home directory for easy execution
+# Copy (do NOT symlink) the update script to the home directory. A symlink here
+# points back into the repo tree that update.sh itself overwrites while running,
+# which can truncate the script mid-execution. A standalone copy is immune.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$SCRIPT_DIR/update.sh" ]; then
-    echo "Mapping: update.sh -> $HOME/update.sh"
-    ln -sfn "$SCRIPT_DIR/update.sh" "$HOME/update.sh"
+    echo "Mapping: update.sh -> home directory (standalone copy)"
+    cp -f "$SCRIPT_DIR/update.sh" "$HOME/update.sh"
     chmod +x "$HOME/update.sh"
 fi
 
