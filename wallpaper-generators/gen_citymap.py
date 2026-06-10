@@ -58,7 +58,7 @@ mx,my=pt.x, pt.y
 for r,a in [(900,0.10),(600,0.16),(360,0.30)]:
     ax.add_patch(Circle((mx,my), r, color=RED, alpha=a, zorder=6))
 ax.add_patch(Circle((mx,my), 1500, fill=False, edgecolor=RED, lw=1.4, alpha=0.85, zorder=6))
-ax.add_patch(Circle((mx,my), 170, color=RED, zorder=7))
+ax.add_patch(Circle((mx,my), 90, color=RED, zorder=7))
 
 # --- zoom to the street network (so distant rivers don't blow out the view) ---
 minx,miny,maxx,maxy = edges.total_bounds

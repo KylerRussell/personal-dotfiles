@@ -10,7 +10,7 @@ import os
 import numpy as np
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.patches import Circle
+from matplotlib.patches import Circle, Ellipse
 import py3dep
 import rioxarray  # noqa: enables the .rio accessor
 
@@ -45,10 +45,14 @@ except Exception as e:
     print("  (river overlay skipped:", e, ")")
 
 ax.set_xlim(W,E); ax.set_ylim(S,N)
+# markers drawn as ellipses so the aspect correction renders them as true circles
+asp=1/np.cos(np.radians(CENTER[0]))
+def mark(r, **kw):
+    ax.add_patch(Ellipse((CENTER[1],CENTER[0]), width=2*r, height=2*r/asp, **kw))
 for r,a in [(0.012,0.10),(0.008,0.16),(0.005,0.30)]:
-    ax.add_patch(Circle((CENTER[1],CENTER[0]), r, color=RED, alpha=a, zorder=6))
-ax.add_patch(Circle((CENTER[1],CENTER[0]), 0.02, fill=False, edgecolor=RED, lw=1.4, alpha=0.85, zorder=6))
-ax.add_patch(Circle((CENTER[1],CENTER[0]), 0.0022, color=RED, zorder=7))
+    mark(r, color=RED, alpha=a, zorder=6)
+mark(0.02, fill=False, edgecolor=RED, lw=1.4, alpha=0.85, zorder=6)
+mark(0.0013, color=RED, zorder=7)
 
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 fig.savefig(OUT, facecolor=BG, dpi=100)
