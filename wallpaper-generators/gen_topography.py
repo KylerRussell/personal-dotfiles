@@ -61,11 +61,17 @@ os.makedirs(os.path.dirname(OUT), exist_ok=True)
 fig.savefig(OUT, facecolor=BG, dpi=100)
 print("wrote", os.path.abspath(OUT))
 
-# Composite the map into the right two-thirds of a 1920x1080 canvas;
-# the left third stays background colour (room for telemetry/clock text).
+# Composite onto the canvas, nudged a little left of the other panels, with its
+# left/right edges feathered into the background so there's no hard seam.
 from PIL import Image as _PILImage
 _BG_RGB=(233,231,226)
 _m=_PILImage.open(OUT).convert("RGB")
+_XOFF=470          # panel left edge in px (smaller = further left)
+_FADE=230          # px over which contours fade into the background each side
+_mask=np.full((_m.height,_m.width),255,np.uint8)
+_ramp=(np.linspace(0,1,_FADE)*255).astype(np.uint8)
+_mask[:,:_FADE]=_ramp[np.newaxis,:]
+_mask[:,-_FADE:]=_ramp[::-1][np.newaxis,:]
 _canvas=_PILImage.new("RGB",(1920,1080),_BG_RGB)
-_canvas.paste(_m,(1920-_m.width,0))
+_canvas.paste(_m,(_XOFF,0),_PILImage.fromarray(_mask,"L"))
 _canvas.save(OUT)
