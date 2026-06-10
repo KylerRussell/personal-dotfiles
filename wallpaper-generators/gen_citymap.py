@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 """Kansas City street-grid wallpaper from live OpenStreetMap data (osmnx).
 
-Run where the internet is reachable (e.g. inside the VM):
     pip install --break-system-packages osmnx matplotlib
     python3 gen_citymap.py
 Writes ../dotfiles/hypr/wallpapers/citymap.png  (1920x1080, text-free).
-
-Tested against osmnx 1.9-2.x. If an osmnx call name differs in your version,
-the error message will say which one; tell me and I'll adjust.
 """
 import os
 import matplotlib; matplotlib.use("Agg")
@@ -18,7 +14,7 @@ import geopandas as gpd
 from shapely.geometry import Point
 
 BG="#e9e7e2"; ST="#c6c2b9"; MID="#b4afa5"; HW="#a39d92"; WATER="#d3cfc6"; RED="#d9512f"
-CENTER=(39.0997, -94.5786)   # lat, lon  (downtown KC / river confluence)
+CENTER=(39.0997, -94.5786)   # lat, lon (downtown KC / river confluence)
 DIST=6500                    # metres radius
 OUT=os.path.join(os.path.dirname(os.path.abspath(__file__)),"..","dotfiles","hypr","wallpapers","citymap.png")
 
@@ -63,6 +59,13 @@ for r,a in [(900,0.10),(600,0.16),(360,0.30)]:
     ax.add_patch(Circle((mx,my), r, color=RED, alpha=a, zorder=6))
 ax.add_patch(Circle((mx,my), 1500, fill=False, edgecolor=RED, lw=1.4, alpha=0.85, zorder=6))
 ax.add_patch(Circle((mx,my), 170, color=RED, zorder=7))
+
+# --- zoom to the street network (so distant rivers don't blow out the view) ---
+minx,miny,maxx,maxy = edges.total_bounds
+cx,cy=(minx+maxx)/2,(miny+maxy)/2
+half=max(maxx-minx, maxy-miny)/2*1.03
+ax.set_xlim(cx-half*16/9, cx+half*16/9)
+ax.set_ylim(cy-half, cy+half)
 
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 fig.savefig(OUT, facecolor=BG, dpi=100)
