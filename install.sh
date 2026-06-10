@@ -49,22 +49,31 @@ else
     echo "Warning: pacman not found. Skipping package installation."
 fi
 
-# Install Barlow Condensed font from Google Fonts
-FONT_DIR="$HOME/.local/share/fonts"
+# Install Barlow Condensed font directly from the google/fonts repo.
+# Pull individual weights (stable raw URLs) instead of the flaky zip endpoint,
+# which extracts into a subfolder and breaks the "already installed" check.
+FONT_DIR="$HOME/.local/share/fonts/barlow-condensed"
+FONT_BASE="https://raw.githubusercontent.com/google/fonts/main/ofl/barlowcondensed"
+FONT_WEIGHTS=(Regular Medium SemiBold Bold)
+
 if [ ! -f "$FONT_DIR/BarlowCondensed-Bold.ttf" ]; then
-    echo "Installing Barlow Condensed font..."
-    mkdir -p "$FONT_DIR"
-    FONT_URL="https://fonts.google.com/download?family=Barlow+Condensed"
-    FONT_TMP="/tmp/barlow_condensed.zip"
     if command -v curl &> /dev/null; then
-        curl -sL "$FONT_URL" -o "$FONT_TMP" 2>/dev/null
-        if [ -f "$FONT_TMP" ]; then
-            unzip -qo "$FONT_TMP" -d "$FONT_DIR/" 2>/dev/null
-            rm -f "$FONT_TMP"
-            fc-cache -f "$FONT_DIR" 2>/dev/null
-            echo "Barlow Condensed font installed."
+        echo "Installing Barlow Condensed font..."
+        mkdir -p "$FONT_DIR"
+        DOWNLOADED=0
+        for weight in "${FONT_WEIGHTS[@]}"; do
+            if curl -fsSL "$FONT_BASE/BarlowCondensed-$weight.ttf" \
+                    -o "$FONT_DIR/BarlowCondensed-$weight.ttf"; then
+                DOWNLOADED=$((DOWNLOADED + 1))
+            else
+                echo "  Warning: failed to fetch BarlowCondensed-$weight.ttf"
+            fi
+        done
+        if [ "$DOWNLOADED" -gt 0 ]; then
+            fc-cache -f "$FONT_DIR" &> /dev/null
+            echo "Barlow Condensed font installed ($DOWNLOADED weights)."
         else
-            echo "Warning: Could not download Barlow Condensed. Clock may use fallback font."
+            echo "Warning: Could not download Barlow Condensed. Clock may use a fallback font."
         fi
     else
         echo "Warning: curl not found. Skipping font download."
