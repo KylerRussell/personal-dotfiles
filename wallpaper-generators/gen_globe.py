@@ -32,9 +32,9 @@ def ortho(lon, lat):
     y=np.cos(p0)*np.sin(lat)-np.sin(p0)*np.cos(lat)*np.cos(lon-l0)
     return x, y, cosc >= -0.02
 
-fig=plt.figure(figsize=(19.2,10.8),dpi=100); fig.patch.set_facecolor(BG)
+fig=plt.figure(figsize=(12.8,10.8),dpi=100); fig.patch.set_facecolor(BG)
 ax=fig.add_axes([0,0,1,1]); ax.set_facecolor(BG)
-ax.set_xlim(-1.92,1.92); ax.set_ylim(-1.08,1.08); ax.set_aspect("equal"); ax.axis("off")
+ax.set_xlim(-1.304,1.304); ax.set_ylim(-1.1,1.1); ax.set_aspect("equal"); ax.axis("off")
 ax.add_patch(Circle((0,0),1.0,facecolor=OCEAN,edgecolor=RING,lw=1.6,zorder=1))
 clip=Circle((0,0),1.0,transform=ax.transData)
 
@@ -81,7 +81,11 @@ os.makedirs(os.path.dirname(OUT),exist_ok=True)
 fig.savefig(OUT,facecolor=BG,dpi=100)
 print("wrote",os.path.abspath(OUT))
 
-# Flatten RGBA -> RGB: conky's ${image} renders alpha images as a white box
-# on transparent ARGB windows. A plain-RGB PNG renders correctly.
+# Composite the map into the right two-thirds of a 1920x1080 canvas;
+# the left third stays background colour (room for telemetry/clock text).
 from PIL import Image as _PILImage
-_PILImage.open(OUT).convert("RGB").save(OUT)
+_BG_RGB=(233,231,226)
+_m=_PILImage.open(OUT).convert("RGB")
+_canvas=_PILImage.new("RGB",(1920,1080),_BG_RGB)
+_canvas.paste(_m,(1920-_m.width,0))
+_canvas.save(OUT)

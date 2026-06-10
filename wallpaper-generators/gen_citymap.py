@@ -40,7 +40,7 @@ try:
 except Exception as e:
     print("  (water fetch skipped:", e, ")")
 
-fig=plt.figure(figsize=(19.2,10.8),dpi=100); fig.patch.set_facecolor(BG)
+fig=plt.figure(figsize=(12.8,10.8),dpi=100); fig.patch.set_facecolor(BG)
 ax=fig.add_axes([0,0,1,1]); ax.set_facecolor(BG); ax.axis("off"); ax.set_aspect("equal")
 
 if water is not None and len(water):
@@ -64,14 +64,18 @@ ax.add_patch(Circle((mx,my), 90, color=RED, zorder=7))
 minx,miny,maxx,maxy = edges.total_bounds
 cx,cy=(minx+maxx)/2,(miny+maxy)/2
 half=max(maxx-minx, maxy-miny)/2*1.03
-ax.set_xlim(cx-half*16/9, cx+half*16/9)
+ax.set_xlim(cx-half*1280/1080, cx+half*1280/1080)
 ax.set_ylim(cy-half, cy+half)
 
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 fig.savefig(OUT, facecolor=BG, dpi=100)
 print("wrote", os.path.abspath(OUT))
 
-# Flatten RGBA -> RGB: conky's ${image} renders alpha images as a white box
-# on transparent ARGB windows. A plain-RGB PNG renders correctly.
+# Composite the map into the right two-thirds of a 1920x1080 canvas;
+# the left third stays background colour (room for telemetry/clock text).
 from PIL import Image as _PILImage
-_PILImage.open(OUT).convert("RGB").save(OUT)
+_BG_RGB=(233,231,226)
+_m=_PILImage.open(OUT).convert("RGB")
+_canvas=_PILImage.new("RGB",(1920,1080),_BG_RGB)
+_canvas.paste(_m,(1920-_m.width,0))
+_canvas.save(OUT)

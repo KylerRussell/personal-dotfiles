@@ -27,7 +27,7 @@ z=dem.values; x=dem.x.values; y=dem.y.values
 zmin,zmax=np.nanmin(z),np.nanmax(z)
 print(f"  elevation {zmin:.0f}-{zmax:.0f} m, grid {z.shape}")
 
-fig=plt.figure(figsize=(19.2,10.8),dpi=100); fig.patch.set_facecolor(BG)
+fig=plt.figure(figsize=(12.8,10.8),dpi=100); fig.patch.set_facecolor(BG)
 ax=fig.add_axes([0,0,1,1]); ax.set_facecolor(BG); ax.axis("off")
 ax.set_aspect(1/np.cos(np.radians(CENTER[0])))   # geographic aspect correction
 
@@ -58,7 +58,11 @@ os.makedirs(os.path.dirname(OUT), exist_ok=True)
 fig.savefig(OUT, facecolor=BG, dpi=100)
 print("wrote", os.path.abspath(OUT))
 
-# Flatten RGBA -> RGB: conky's ${image} renders alpha images as a white box
-# on transparent ARGB windows. A plain-RGB PNG renders correctly.
+# Composite the map into the right two-thirds of a 1920x1080 canvas;
+# the left third stays background colour (room for telemetry/clock text).
 from PIL import Image as _PILImage
-_PILImage.open(OUT).convert("RGB").save(OUT)
+_BG_RGB=(233,231,226)
+_m=_PILImage.open(OUT).convert("RGB")
+_canvas=_PILImage.new("RGB",(1920,1080),_BG_RGB)
+_canvas.paste(_m,(1920-_m.width,0))
+_canvas.save(OUT)
