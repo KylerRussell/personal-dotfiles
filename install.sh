@@ -18,7 +18,6 @@ if command -v pacman &> /dev/null; then
         kitty
         rofi-wayland
         swaybg
-        conky
         mesa
         vulkan-swrast
         vulkan-tools
@@ -113,7 +112,7 @@ fi
 mkdir -p "$TARGET_DIR"
 
 # Loop through configurations and generate absolute links
-for config in hypr kitty rofi conky nwg-wrapper; do
+for config in hypr kitty rofi nwg-wrapper; do
     if [ -d "$REPO_DIR/$config" ]; then
         echo "Mapping: $config -> $TARGET_DIR/$config"
         # Remove old configs safely
