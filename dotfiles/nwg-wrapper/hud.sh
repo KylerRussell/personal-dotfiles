@@ -15,9 +15,12 @@ m2_telemetry=coordinates; m2_hero=clock24; m2_image=citymap;    m2_figure=fig2
 m3_telemetry=coordinates; m3_hero=clock24; m3_image=topography; m3_figure=fig3
 [ -f "$CONF" ] && source "$CONF"
 
-# Clear any running HUD before relaunching
-pkill -f nwg-wrapper 2>/dev/null
-pkill -x swaybg     2>/dev/null
+# Clear any running HUD before relaunching.
+# Match "nwg-wrapper -o" (the widget invocation) NOT the bare string — otherwise
+# pkill -f also matches this script's path (.../nwg-wrapper/hud.sh) and the
+# config utility (.../nwg-wrapper/hud-config.py) and kills them mid-run.
+pkill -f 'nwg-wrapper -o' 2>/dev/null
+pkill -x swaybg           2>/dev/null
 sleep 0.5
 
 launch() {
