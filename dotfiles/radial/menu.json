@@ -1,0 +1,290 @@
+{
+  "label": "MENU",
+  "children": [
+    {
+      "label": "APPS",
+      "icon": "",
+      "children": [
+        {
+          "label": "TERMINAL",
+          "icon": "",
+          "cmd": "kitty"
+        },
+        {
+          "label": "BROWSER",
+          "icon": "",
+          "cmd": "firefox"
+        },
+        {
+          "label": "FILES",
+          "icon": "",
+          "cmd": "thunar"
+        },
+        {
+          "label": "LAUNCHER",
+          "icon": "",
+          "cmd": "rofi -show drun"
+        },
+        {
+          "label": "EDITOR",
+          "icon": "",
+          "cmd": "kitty -e nvim"
+        },
+        {
+          "label": "MEDIA",
+          "icon": "",
+          "cmd": "mpv"
+        }
+      ]
+    },
+    {
+      "label": "WINDOWS",
+      "icon": "",
+      "children": [
+        {
+          "label": "WINDOW",
+          "icon": "",
+          "children": [
+            {
+              "label": "CLOSE",
+              "icon": "",
+              "cmd": "hyprctl dispatch killactive"
+            },
+            {
+              "label": "FLOAT",
+              "icon": "",
+              "cmd": "hyprctl dispatch togglefloating"
+            },
+            {
+              "label": "FULLSCREEN",
+              "icon": "",
+              "cmd": "hyprctl dispatch fullscreen"
+            },
+            {
+              "label": "PIN",
+              "icon": "",
+              "cmd": "hyprctl dispatch pin"
+            },
+            {
+              "label": "CENTER",
+              "icon": "",
+              "cmd": "hyprctl dispatch centerwindow"
+            },
+            {
+              "label": "SPLIT",
+              "icon": "",
+              "cmd": "hyprctl dispatch layoutmsg togglesplit"
+            }
+          ]
+        },
+        {
+          "label": "WORKSPACE",
+          "icon": "",
+          "children": [
+            {
+              "label": "PREV",
+              "icon": "",
+              "cmd": "hyprctl dispatch workspace e-1"
+            },
+            {
+              "label": "NEXT",
+              "icon": "",
+              "cmd": "hyprctl dispatch workspace e+1"
+            },
+            {
+              "label": "MOVE +",
+              "icon": "",
+              "cmd": "hyprctl dispatch movetoworkspace e+1"
+            },
+            {
+              "label": "MOVE -",
+              "icon": "",
+              "cmd": "hyprctl dispatch movetoworkspace e-1"
+            },
+            {
+              "label": "SPECIAL",
+              "icon": "",
+              "cmd": "hyprctl dispatch togglespecialworkspace"
+            },
+            {
+              "label": "MON >",
+              "icon": "",
+              "cmd": "hyprctl dispatch focusmonitor +1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "SYSTEM",
+      "icon": "",
+      "children": [
+        {
+          "label": "LOCK",
+          "icon": "",
+          "cmd": "hyprlock"
+        },
+        {
+          "label": "LOGOUT",
+          "icon": "",
+          "cmd": "hyprctl dispatch exit"
+        },
+        {
+          "label": "SUSPEND",
+          "icon": "",
+          "cmd": "systemctl suspend"
+        },
+        {
+          "label": "REBOOT",
+          "icon": "",
+          "cmd": "systemctl reboot"
+        },
+        {
+          "label": "SHUTDOWN",
+          "icon": "",
+          "cmd": "systemctl poweroff"
+        },
+        {
+          "label": "AUDIO",
+          "icon": "",
+          "children": [
+            {
+              "label": "VOL +",
+              "icon": "",
+              "cmd": "pamixer -i 5"
+            },
+            {
+              "label": "VOL -",
+              "icon": "",
+              "cmd": "pamixer -d 5"
+            },
+            {
+              "label": "MUTE",
+              "icon": "",
+              "cmd": "pamixer -t"
+            },
+            {
+              "label": "BRIGHT +",
+              "icon": "",
+              "cmd": "brightnessctl set +10%"
+            },
+            {
+              "label": "BRIGHT -",
+              "icon": "",
+              "cmd": "brightnessctl set 10%-"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "DESKTOP",
+      "icon": "",
+      "children": [
+        {
+          "label": "HUD CONFIG",
+          "icon": "",
+          "cmd": "python3 $HOME/.config/nwg-wrapper/hud-config.py"
+        },
+        {
+          "label": "WALLPAPERS",
+          "icon": "",
+          "children": [
+            {
+              "label": "GLOBE",
+              "icon": "",
+              "cmd": "cd $HOME/personal-dotfiles-main/wallpaper-generators && python3 gen_globe.py && $HOME/.config/nwg-wrapper/hud.sh"
+            },
+            {
+              "label": "CITY",
+              "icon": "",
+              "cmd": "cd $HOME/personal-dotfiles-main/wallpaper-generators && python3 gen_citymap.py && $HOME/.config/nwg-wrapper/hud.sh"
+            },
+            {
+              "label": "TOPO",
+              "icon": "",
+              "cmd": "cd $HOME/personal-dotfiles-main/wallpaper-generators && python3 gen_topography.py && $HOME/.config/nwg-wrapper/hud.sh"
+            },
+            {
+              "label": "ALL",
+              "icon": "",
+              "cmd": "cd $HOME/personal-dotfiles-main/wallpaper-generators && python3 gen_globe.py && python3 gen_citymap.py && python3 gen_topography.py && $HOME/.config/nwg-wrapper/hud.sh"
+            }
+          ]
+        },
+        {
+          "label": "RELOAD",
+          "icon": "",
+          "cmd": "hyprctl reload"
+        },
+        {
+          "label": "MONITORS",
+          "icon": "",
+          "cmd": "kitty -e bash -c 'hyprctl monitors; read -n1 -p \"[enter]\"'"
+        }
+      ]
+    },
+    {
+      "label": "CAPTURE",
+      "icon": "",
+      "children": [
+        {
+          "label": "REGION",
+          "icon": "",
+          "cmd": "grim -g \"$(slurp)\" $HOME/shot-$(date +%s).png"
+        },
+        {
+          "label": "WINDOW",
+          "icon": "",
+          "cmd": "bash $HOME/.config/radial/shot-window.sh"
+        },
+        {
+          "label": "FULL",
+          "icon": "",
+          "cmd": "grim $HOME/shot-$(date +%s).png"
+        },
+        {
+          "label": "RECORD",
+          "icon": "",
+          "cmd": "pkill -INT wf-recorder || wf-recorder -f $HOME/rec-$(date +%s).mp4"
+        },
+        {
+          "label": "COLOR",
+          "icon": "",
+          "cmd": "hyprpicker -a"
+        }
+      ]
+    },
+    {
+      "label": "TOOLS",
+      "icon": "",
+      "children": [
+        {
+          "label": "MONITOR",
+          "icon": "",
+          "cmd": "kitty -e btop"
+        },
+        {
+          "label": "CLIPBOARD",
+          "icon": "",
+          "cmd": "cliphist list | rofi -dmenu | cliphist decode | wl-copy"
+        },
+        {
+          "label": "CALC",
+          "icon": "",
+          "cmd": "kitty -e qalc"
+        },
+        {
+          "label": "NETWORK",
+          "icon": "",
+          "cmd": "kitty -e nmtui"
+        },
+        {
+          "label": "BLUETOOTH",
+          "icon": "",
+          "cmd": "kitty -e bluetoothctl"
+        }
+      ]
+    }
+  ]
+}

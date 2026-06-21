@@ -7,3 +7,8 @@ dotfiles/hypr/wallpapers/*.png
 # Python caches
 __pycache__/
 *.pyc
+
+# HUD selections are user state — keep them out of git so update.sh can't
+# revert them. hud.conf.example documents the format; hud.sh + the utility
+# both carry built-in defaults, so a fresh install works with no hud.conf.
+dotfiles/nwg-wrapper/hud.conf
