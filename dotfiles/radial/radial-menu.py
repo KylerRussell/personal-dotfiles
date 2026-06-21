@@ -249,6 +249,7 @@ class Radial(Gtk.Window):
             a0 = start + i * seg
             if i == self.hover:
                 cr.set_source_rgba(*HILITE)        # annular sector (hub stays clear)
+                cr.new_sub_path()                  # detach from any stray text point
                 cr.arc(cx, cy, CR, a0, a0 + seg)
                 cr.arc_negative(cx, cy, INNER, a0 + seg, a0)
                 cr.close_path()
@@ -268,6 +269,7 @@ class Radial(Gtk.Window):
         # centre hub: a clean ring so the crosshair / back-arrow read clearly
         cr.set_source_rgb(*BORDER)
         cr.set_line_width(1)
+        cr.new_sub_path()                          # detach from the last text point
         cr.arc(cx, cy, INNER, 0, 2 * math.pi)
         cr.stroke()
 
