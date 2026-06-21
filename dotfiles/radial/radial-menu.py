@@ -3,14 +3,16 @@
 
 A gtk-layer-shell overlay that draws a hierarchical pie menu at the cursor.
 Left-click a wedge to descend a sub-menu or run its command. The centre
-crosshair / right-click / Esc goes back one level (or closes at the top).
-Clicking outside the wheel closes it.
+(crosshair at the top level, back-arrow in sub-levels) / right-click / Esc
+goes back one level (or closes at the top). Clicking outside closes it.
 
-The menu tree lives in menu.json next to this file.
+Single-instance: launching while a menu is open just closes it (toggle), so
+Super+Space can't stack copies. The tree lives in menu.json next to this file.
 """
 import os
 import json
 import math
+import signal
 import subprocess
 import gi
 gi.require_version("Gtk", "3.0")
@@ -19,20 +21,24 @@ gi.require_version("Pango", "1.0")
 from gi.repository import Gtk, Gdk, GtkLayerShell, Pango, PangoCairo
 import cairo
 
-MENU_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "menu.json")
+HERE = os.path.dirname(os.path.abspath(__file__))
+MENU_FILE = os.path.join(HERE, "menu.json")
+PIDFILE = "/tmp/radial-menu.pid"
 
 # Palette
 BG       = (1.00, 1.00, 1.00, 0.90)     # frosted white 90%
-BORDER   = (0.55, 0.55, 0.55)
+EDGE     = (0.78, 0.78, 0.78, 0.6)      # subtle outer edge
+BORDER   = (0.55, 0.55, 0.55)           # inset outline
 DIVIDER  = (0.72, 0.72, 0.72)
 TEXT     = (0.227, 0.227, 0.227)        # #3a3a3a
 ACCENT   = (0.851, 0.318, 0.184)        # #d9512f
 HILITE   = (0.851, 0.318, 0.184, 0.16)  # hovered wedge fill
 
-RADIUS = 178      # outer radius
+RADIUS = 178      # outer (white) radius
+INSET = 7         # gap between white edge and the gray outline
 INNER = 50        # centre "back" zone
-LABEL_R = 122     # label distance from centre
-ICON_R = 88       # icon distance from centre
+LABEL_R = 108     # icon/label anchor distance from centre
+ICON_FONT = "Font Awesome 6 Free"
 
 
 def hypr(args):
@@ -126,9 +132,9 @@ class Radial(Gtk.Window):
         if not kids:
             return -1
         if r < INNER:
-            return -2              # centre = back
+            return -2
         if r > RADIUS + 24:
-            return -1              # outside = close
+            return -1
         ang = (math.atan2(dy, dx) + math.pi / 2) % (2 * math.pi)
         return int(ang / (2 * math.pi) * len(kids)) % len(kids)
 
@@ -185,16 +191,31 @@ class Radial(Gtk.Window):
     def _close(self):
         Gtk.main_quit()
 
-    def _text(self, cr, text, x, y, size, color):
+    def _text(self, cr, text, x, y, size, color, family="Barlow Condensed",
+              weight=Pango.Weight.NORMAL):
         if not text:
             return
         layout = PangoCairo.create_layout(cr)
-        layout.set_font_description(Pango.FontDescription(f"Barlow Condensed {size}"))
+        fd = Pango.FontDescription(f"{family} {size}")
+        fd.set_weight(weight)
+        layout.set_font_description(fd)
         layout.set_text(text, -1)
         w, h = layout.get_pixel_size()
         cr.move_to(x - w / 2, y - h / 2)
         cr.set_source_rgb(*color)
         PangoCairo.show_layout(cr, layout)
+
+    def _draw_back(self, cr, cx, cy):
+        cr.set_source_rgb(*TEXT)
+        cr.set_line_width(2)
+        cr.move_to(cx + 8, cy)
+        cr.line_to(cx - 6, cy)
+        cr.stroke()
+        cr.move_to(cx - 6, cy)
+        cr.line_to(cx, cy - 5)
+        cr.move_to(cx - 6, cy)
+        cr.line_to(cx, cy + 5)
+        cr.stroke()
 
     def on_draw(self, _area, cr):
         cr.set_operator(cairo.OPERATOR_CLEAR)
@@ -206,15 +227,20 @@ class Radial(Gtk.Window):
         if n == 0:
             return
         cx, cy, R = self.cx, self.cy, RADIUS
+        CR = R - INSET                      # inset outline / content radius
 
-        cr.set_source_rgba(0, 0, 0, 0.12)          # drop shadow
+        cr.set_source_rgba(0, 0, 0, 0.12)   # drop shadow
         cr.arc(cx + 4, cy + 6, R, 0, 2 * math.pi)
         cr.fill()
-        cr.set_source_rgba(*BG)                     # disk
+        cr.set_source_rgba(*BG)             # white disk + subtle outer edge
         cr.arc(cx, cy, R, 0, 2 * math.pi)
         cr.fill_preserve()
-        cr.set_source_rgb(*BORDER)
+        cr.set_source_rgba(*EDGE)
         cr.set_line_width(1)
+        cr.stroke()
+        cr.set_source_rgb(*BORDER)          # inset outline (white rim outside it)
+        cr.set_line_width(1)
+        cr.arc(cx, cy, CR, 0, 2 * math.pi)
         cr.stroke()
 
         start = -math.pi / 2
@@ -224,42 +250,64 @@ class Radial(Gtk.Window):
             if i == self.hover:
                 cr.set_source_rgba(*HILITE)
                 cr.move_to(cx, cy)
-                cr.arc(cx, cy, R, a0, a0 + seg)
+                cr.arc(cx, cy, CR, a0, a0 + seg)
                 cr.close_path()
                 cr.fill()
             cr.set_source_rgb(*DIVIDER)
             cr.set_line_width(1)
             cr.move_to(cx, cy)
-            cr.line_to(cx + R * math.cos(a0), cy + R * math.sin(a0))
+            cr.line_to(cx + CR * math.cos(a0), cy + CR * math.sin(a0))
             cr.stroke()
             am = a0 + seg / 2
-            self._text(cr, node.get("icon", ""), cx + ICON_R * math.cos(am),
-                       cy + ICON_R * math.sin(am), 17, TEXT)
-            self._text(cr, node["label"], cx + LABEL_R * math.cos(am),
-                       cy + LABEL_R * math.sin(am), 14, TEXT)
+            ax = cx + LABEL_R * math.cos(am)
+            ay = cy + LABEL_R * math.sin(am)
+            self._text(cr, node.get("icon", ""), ax, ay - 13, 17, TEXT,
+                       family=ICON_FONT, weight=Pango.Weight.HEAVY)
+            self._text(cr, node["label"], ax, ay + 10, 13, TEXT)
 
-        # breadcrumb (current level) at top inside the disk
-        self._text(cr, self.node.get("label", ""), cx, cy - R + 20, 12, ACCENT)
-        # centre crosshair
-        cr.set_source_rgb(*DIVIDER)
-        cr.set_line_width(1)
-        cr.move_to(cx - 7, cy)
-        cr.line_to(cx + 7, cy)
-        cr.move_to(cx, cy - 7)
-        cr.line_to(cx, cy + 7)
-        cr.stroke()
+        # centre: crosshair at the top level, back-arrow inside sub-levels
+        if len(self.stack) > 1:
+            self._draw_back(cr, cx, cy)
+        else:
+            cr.set_source_rgb(*DIVIDER)
+            cr.set_line_width(1)
+            cr.move_to(cx - 7, cy)
+            cr.line_to(cx + 7, cy)
+            cr.move_to(cx, cy - 7)
+            cr.line_to(cx, cy + 7)
+            cr.stroke()
 
 
 def main():
+    # Single-instance toggle: if a menu is already open, close it and exit.
+    if os.path.exists(PIDFILE):
+        try:
+            old = int(open(PIDFILE).read().strip())
+            os.kill(old, signal.SIGTERM)
+            os.remove(PIDFILE)
+            return
+        except (ValueError, ProcessLookupError):
+            try:
+                os.remove(PIDFILE)
+            except OSError:
+                pass
     try:
         menu = json.load(open(MENU_FILE))
     except Exception as e:
         print("Failed to read menu.json:", e)
         return
-    win = Radial(menu)
-    win.connect("destroy", Gtk.main_quit)
-    win.show_all()
-    Gtk.main()
+    with open(PIDFILE, "w") as f:
+        f.write(str(os.getpid()))
+    try:
+        win = Radial(menu)
+        win.connect("destroy", Gtk.main_quit)
+        win.show_all()
+        Gtk.main()
+    finally:
+        try:
+            os.remove(PIDFILE)
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":
