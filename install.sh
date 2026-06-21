@@ -121,8 +121,9 @@ for config in hypr kitty rofi nwg-wrapper; do
     fi
 done
 
-# HUD widget scripts must be executable
-chmod +x "$TARGET_DIR"/nwg-wrapper/*.sh 2>/dev/null
+# HUD scripts must be executable
+chmod +x "$TARGET_DIR"/nwg-wrapper/*.sh "$TARGET_DIR"/nwg-wrapper/hud-config.py \
+         "$TARGET_DIR"/nwg-wrapper/presets/*/*.sh 2>/dev/null
 
 # Copy (do NOT symlink) the update script to the home directory. A symlink here
 # points back into the repo tree that update.sh itself overwrites while running,
