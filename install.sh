@@ -109,6 +109,12 @@ else
     echo "nwg-wrapper already installed."
 fi
 
+# Python deps for HUD line modules (sunrise/sunset uses astral)
+if command -v pip &> /dev/null; then
+    pip install --break-system-packages -q astral &> /dev/null \
+        || echo "Warning: could not install astral (sunrise line will show '——')."
+fi
+
 mkdir -p "$TARGET_DIR"
 
 # Loop through configurations and generate absolute links
@@ -123,7 +129,7 @@ done
 
 # HUD scripts must be executable
 chmod +x "$TARGET_DIR"/nwg-wrapper/*.sh "$TARGET_DIR"/nwg-wrapper/hud-config.py \
-         "$TARGET_DIR"/nwg-wrapper/presets/*/*.sh 2>/dev/null
+         "$TARGET_DIR"/nwg-wrapper/presets/lines/*/*.sh 2>/dev/null
 
 # Copy (do NOT symlink) the update script to the home directory. A symlink here
 # points back into the repo tree that update.sh itself overwrites while running,
