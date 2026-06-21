@@ -248,14 +248,14 @@ class Radial(Gtk.Window):
         for i, node in enumerate(kids):
             a0 = start + i * seg
             if i == self.hover:
-                cr.set_source_rgba(*HILITE)
-                cr.move_to(cx, cy)
+                cr.set_source_rgba(*HILITE)        # annular sector (hub stays clear)
                 cr.arc(cx, cy, CR, a0, a0 + seg)
+                cr.arc_negative(cx, cy, INNER, a0 + seg, a0)
                 cr.close_path()
                 cr.fill()
-            cr.set_source_rgb(*DIVIDER)
+            cr.set_source_rgb(*DIVIDER)            # dividers stop at the hub edge
             cr.set_line_width(1)
-            cr.move_to(cx, cy)
+            cr.move_to(cx + INNER * math.cos(a0), cy + INNER * math.sin(a0))
             cr.line_to(cx + CR * math.cos(a0), cy + CR * math.sin(a0))
             cr.stroke()
             am = a0 + seg / 2
@@ -265,16 +265,22 @@ class Radial(Gtk.Window):
                        family=ICON_FONT, weight=Pango.Weight.HEAVY)
             self._text(cr, node["label"], ax, ay + 10, 13, TEXT)
 
+        # centre hub: a clean ring so the crosshair / back-arrow read clearly
+        cr.set_source_rgb(*BORDER)
+        cr.set_line_width(1)
+        cr.arc(cx, cy, INNER, 0, 2 * math.pi)
+        cr.stroke()
+
         # centre: crosshair at the top level, back-arrow inside sub-levels
         if len(self.stack) > 1:
             self._draw_back(cr, cx, cy)
         else:
-            cr.set_source_rgb(*DIVIDER)
-            cr.set_line_width(1)
-            cr.move_to(cx - 7, cy)
-            cr.line_to(cx + 7, cy)
-            cr.move_to(cx, cy - 7)
-            cr.line_to(cx, cy + 7)
+            cr.set_source_rgb(*TEXT)
+            cr.set_line_width(1.5)
+            cr.move_to(cx - 8, cy)
+            cr.line_to(cx + 8, cy)
+            cr.move_to(cx, cy - 8)
+            cr.line_to(cx, cy + 8)
             cr.stroke()
 
 
