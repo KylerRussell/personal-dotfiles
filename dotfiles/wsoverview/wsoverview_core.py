@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Network-graph workspace overview — pure-cairo model + layout + render.
 
-This module has NO GTK dependency so it can be rendered headlessly for tests.
-The overlay app (ws-overview.py) feeds it live hyprctl data; the test harness
-feeds mock data. Everything is drawn with the cairo "toy" text API so it works
-identically in the sandbox and in the VM.
+No GTK dependency, so it renders headlessly for tests. The overlay app feeds
+live hyprctl data; the test harness feeds mock data. All text uses the cairo
+"toy" API so it behaves identically in the sandbox and the VM.
 
-Pipeline:  build_model(...) -> layout(model, W, H) -> render(cr, ..., hover)
-hit_test(lay, x, y) maps a cursor position back to a node/box id.
+Pipeline:  build_model(...) -> layout(model, W, H) -> render(cr, lay, model, ...)
+Interaction helpers: pick(lay, x, y) (what's grabbable under the cursor) and
+drop_target(lay, x, y) (where a drag would land). The overlay turns those
+descriptors into hyprctl dispatch calls.
 """
 import os
 import math
@@ -15,27 +16,24 @@ import hashlib
 import cairo
 
 # ---- Anduril palette -------------------------------------------------------
-BG        = (0.906, 0.894, 0.871)   # warm light gray   #e7e4de
-GRID      = (0.78, 0.77, 0.74)      # dot grid
-TICK      = (0.66, 0.65, 0.62)      # edge crosshairs
-TELEM     = (0.46, 0.45, 0.43)      # monospace telemetry text
-CHARCOAL  = (0.227, 0.227, 0.227)   # #3a3a3a labels / lines
-LINE      = (0.30, 0.30, 0.31)      # connection lines
-DOT       = (0.24, 0.24, 0.25)      # junction dots
-ACCENT    = (0.851, 0.318, 0.184)   # #d9512f red-orange
-BOX_FILL  = (0.227, 0.227, 0.239)   # dark gray workspace box  #3a3a3d
+BG        = (0.906, 0.894, 0.871)
+GRID      = (0.72, 0.71, 0.68)      # dot grid (denser + a touch darker)
+TICK      = (0.62, 0.61, 0.58)      # edge crosshairs
+TELEM     = (0.46, 0.45, 0.43)
+CHARCOAL  = (0.227, 0.227, 0.227)
+LINE      = (0.30, 0.30, 0.31)
+DOT       = (0.24, 0.24, 0.25)
+ACCENT    = (0.851, 0.318, 0.184)
+ACCENT_FILL = (0.851, 0.318, 0.184, 0.12)
+BOX_FILL  = (0.227, 0.227, 0.239)
 BOX_EDGE  = (0.15, 0.15, 0.16)
-WIN_FILL  = (0.149, 0.149, 0.165)   # stylized window body  #26262a
+WIN_FILL  = (0.149, 0.149, 0.165)
 WIN_EDGE  = (0.10, 0.10, 0.11)
-PREVIEW_DIM = (0.0, 0.0, 0.0, 0.0)
 
-# stylized window header colors, chosen per app
 APP_PALETTE = [
     (0.36, 0.45, 0.55), (0.45, 0.40, 0.52), (0.50, 0.42, 0.36),
     (0.36, 0.50, 0.45), (0.52, 0.46, 0.36), (0.42, 0.44, 0.50),
 ]
-
-# known class -> display name overrides
 NAME_MAP = {
     "kitty": "KITTY", "firefox": "FIREFOX", "org.mozilla.firefox": "FIREFOX",
     "thunar": "THUNAR", "nautilus": "NAUTILUS", "org.gnome.nautilus": "NAUTILUS",
@@ -50,8 +48,7 @@ def app_name(cls, title=""):
     key = cls.lower()
     if key in NAME_MAP:
         return NAME_MAP[key]
-    short = cls.split(".")[-1]
-    return short.upper()[:12]
+    return cls.split(".")[-1].upper()[:12]
 
 
 def app_color(cls):
@@ -63,12 +60,12 @@ def app_color(cls):
 # Model
 # ---------------------------------------------------------------------------
 def _visible(c):
+    s = c.get("size", [0, 0])
     return (c.get("mapped", True) and not c.get("hidden", False)
-            and c.get("size", [0, 0])[0] > 0 and c.get("size", [0, 0])[1] > 0)
+            and s[0] > 0 and s[1] > 0)
 
 
 def _norm(windows, ref):
-    """Return per-window relative rects (0..1) inside ref=(x,y,w,h)."""
     rx, ry, rw, rh = ref
     if rw <= 0 or rh <= 0:
         return [(0, 0, 1, 1) for _ in windows]
@@ -105,63 +102,58 @@ def _win(c, thumb_dir):
 
 
 def build_model(monitors, workspaces, clients, thumb_dir):
-    """Assemble the overview model from hyprctl json structures."""
     active_ws = {}
     for m in monitors:
-        aw = m.get("activeWorkspace", {})
-        active_ws[aw.get("id")] = m.get("id")
+        active_ws[m.get("activeWorkspace", {}).get("id")] = m.get("id")
     active_ws_ids = set(active_ws.keys())
 
     by_ws = {}
     for c in clients:
-        wid = c.get("workspace", {}).get("id")
-        by_ws.setdefault(wid, []).append(c)
+        by_ws.setdefault(c.get("workspace", {}).get("id"), []).append(c)
 
-    # --- monitor row ---
     mons = []
     for m in sorted(monitors, key=lambda m: m.get("x", 0)):
         awid = m.get("activeWorkspace", {}).get("id")
         wins = [c for c in by_ws.get(awid, []) if _visible(c)]
-        ref = (m.get("x", 0), m.get("y", 0), m.get("width", 1920), m.get("height", 1080))
+        mw, mh = m.get("width", 1920), m.get("height", 1080)
+        ref = (m.get("x", 0), m.get("y", 0), mw, mh)
         rels = _norm(wins, ref)
         mons.append({
             "id": "mon:%s" % m.get("id"),
+            "name": m.get("name", ""),
+            "ws": awid,
+            "w": mw, "h": mh,
             "label": "MONITOR %s" % (m.get("id", 0) + 1),
             "empty": len(wins) == 0,
             "windows": [dict(_win(c, thumb_dir), rel=r) for c, r in zip(wins, rels)],
         })
 
-    # --- inactive workspace boxes + free floating nodes ---
     boxes, free = [], []
     ws_meta = {w.get("id"): w for w in workspaces}
     for wid, cs in sorted(by_ws.items(), key=lambda kv: (kv[0] is None, kv[0])):
         if wid in active_ws_ids or wid is None:
             continue
-        if wid is not None and wid < 0:        # special / scratchpad -> free nodes
+        if wid < 0:                                  # special / scratchpad
             for c in cs:
                 free.append(dict(_win(c, thumb_dir), ws=wid))
             continue
         tiled = [c for c in cs if not c.get("floating", False)]
-        floaters = [c for c in cs if c.get("floating", False)]
-        for c in floaters:
+        for c in (c for c in cs if c.get("floating", False)):
             free.append(dict(_win(c, thumb_dir), ws=wid))
         if not tiled:
             continue
         rels = _norm(tiled, _bbox(tiled))
         name = ws_meta.get(wid, {}).get("name", str(wid))
         boxes.append({
-            "id": "ws:%s" % wid,
-            "ws": wid,
+            "id": "ws:%s" % wid, "ws": wid,
             "label": ("WS %s" % name).upper(),
             "windows": [dict(_win(c, thumb_dir), rel=r) for c, r in zip(tiled, rels)],
         })
 
-    inactive_count = sum(len(b["windows"]) for b in boxes) + len(free)
-    active_count = sum(len(m["windows"]) for m in mons)
-    return {
-        "monitors": mons, "boxes": boxes, "free": free,
-        "active_count": active_count, "inactive_count": inactive_count,
-    }
+    inactive = sum(len(b["windows"]) for b in boxes) + len(free)
+    active = sum(len(m["windows"]) for m in mons)
+    return {"monitors": mons, "boxes": boxes, "free": free,
+            "active_count": active, "inactive_count": inactive}
 
 
 # ---------------------------------------------------------------------------
@@ -171,111 +163,154 @@ def _seed(s):
     return int(hashlib.md5(s.encode()).hexdigest()[:8], 16)
 
 
+def _place_tiled(rect, windows):
+    """Return [(win, (x,y,w,h)), ...] tiled inside rect from each win['rel']."""
+    cx, cy, cw, ch = rect
+    pad = 8
+    inx, iny, inw, inh = cx + pad, cy + pad, cw - 2 * pad, ch - 2 * pad
+    out = []
+    for win in windows:
+        rx, ry, rw, rh = win["rel"]
+        r = (inx + rx * inw, iny + ry * inh,
+             max(14, rw * inw - 3), max(11, rh * inh - 3))
+        out.append((win, r))
+    return out
+
+
 def layout(model, W, H):
     margin = 42
-    lay = {"W": W, "H": H, "mons": [], "nodes": {}, "conns": [], "labels": []}
+    lay = {"W": W, "H": H, "mons": [], "boxes": [], "free": [],
+           "conns": [], "_centers": {}}
 
-    # monitor row
+    # --- monitor row: true aspect, scaled down, left-aligned ---
     gap = 26
-    mb_w = (W - 2 * margin - 2 * gap) / 3.0
-    mb_h = min(168, mb_w * 0.46)
-    top_y = 70
-    for i, mon in enumerate(model["monitors"][:3]):
-        rect = (margin + i * (mb_w + gap), top_y, mb_w, mb_h)
-        lay["mons"].append({"rect": rect, "mon": mon})
+    mb_h = 178
+    x = margin
+    top_y = 72
+    for mon in model["monitors"][:3]:
+        aspect = (mon["w"] / mon["h"]) if mon["h"] else (16 / 9)
+        mb_w = mb_h * aspect
+        rect = (x, top_y, mb_w, mb_h)
+        wins = _place_tiled(rect, mon["windows"])
+        lay["mons"].append({"id": mon["id"], "rect": rect, "mon": mon, "wins": wins})
+        x += mb_w + gap
 
-    area_top = top_y + mb_h + 78
-    area_bot = H - margin - 22
+    area_top = top_y + mb_h + 84
+    area_bot = H - margin - 24
 
-    # inactive workspace boxes: left column, organic x jitter
+    # --- inactive workspace boxes: left column with organic x jitter ---
     boxes = model["boxes"]
     n = max(1, len(boxes))
-    col_x = margin
-    col_w = W * 0.34
-    bh = min(190, (area_bot - area_top - (n - 1) * 34) / n) if n else 150
-    bh = max(120, bh)
+    bh = max(120, min(190, (area_bot - area_top - (n - 1) * 36) / n)) if boxes else 150
     for i, b in enumerate(boxes):
         sd = _seed(b["id"])
-        wcount = len(b["windows"])
-        bw = min(col_w, 200 + 26 * math.sqrt(max(1, wcount)))
-        jx = (sd % 70)
-        y = area_top + i * (bh + 34)
-        rect = (col_x + jx, y, bw, bh)
-        lay["nodes"][b["id"]] = {"rect": rect, "kind": "box", "data": b}
+        bw = min(W * 0.34, 200 + 26 * math.sqrt(max(1, len(b["windows"]))))
+        rect = (margin + (sd % 70), area_top + i * (bh + 36), bw, bh)
+        wins = _place_tiled(rect, b["windows"])
+        cx, cy = rect[0] + rect[2] / 2, rect[1] + rect[3] / 2
+        lay["boxes"].append({"id": b["id"], "rect": rect, "box": b, "wins": wins,
+                             "center": (cx, cy)})
+        lay["_centers"][b["id"]] = (cx, cy)
 
-    # free floating nodes: scatter in the right area on a jittered grid
+    # --- free floating nodes: jittered grid on the right ---
     free = model["free"]
-    fx0 = W * 0.46
-    fx1 = W - margin - 80
-    fy0 = area_top - 10
-    fy1 = area_bot - 40
-    cols = 3
-    nw, nh = 96, 70
+    fx0, fx1 = W * 0.46, W - margin - 96
+    fy0, fy1 = area_top - 8, area_bot - 40
+    cols = max(1, int((fx1 - fx0) // 150))
+    nw, nh = 100, 72
     for i, f in enumerate(free):
         sd = _seed(f["addr"] or str(i))
-        cxk = i % cols
-        ryk = i // cols
         cell_w = (fx1 - fx0) / cols
-        x = fx0 + cxk * cell_w + (sd % 46)
-        y = fy0 + ryk * 132 + (sd // 47 % 54)
-        y = min(y, fy1)
+        fxk, fyk = i % cols, i // cols
+        fx = fx0 + fxk * cell_w + (sd % 46)
+        fy = min(fy0 + fyk * 134 + (sd // 47 % 54), fy1)
         fid = "free:%s" % (f["addr"] or i)
-        lay["nodes"][fid] = {"rect": (x, y, nw, nh), "kind": "free", "data": f}
+        cx, cy = fx + nw / 2, fy + nh / 2
+        lay["free"].append({"id": fid, "rect": (fx, fy, nw, nh), "win": f})
+        lay["_centers"][fid] = (cx, cy)
         f["_id"] = fid
 
-    # connections: free node -> its origin workspace box; chain boxes; a few webs
-    box_by_ws = {b["ws"]: b["id"] for b in boxes}
+    # --- connection web (boxes <-> their free children + box chain) ---
+    box_by_ws = {b["box"]["ws"]: b["id"] for b in lay["boxes"]}
     for f in free:
         bid = box_by_ws.get(f.get("ws"))
         if bid:
             lay["conns"].append((bid, f["_id"]))
-    for i in range(len(boxes) - 1):
-        lay["conns"].append((boxes[i]["id"], boxes[i + 1]["id"]))
-    # extra organic cross-links for the web look
-    bids = [b["id"] for b in boxes]
-    fids = [f["_id"] for f in free]
-    for j, fid in enumerate(fids):
+    bids = [b["id"] for b in lay["boxes"]]
+    for i in range(len(bids) - 1):
+        lay["conns"].append((bids[i], bids[i + 1]))
+    for j, f in enumerate(free):
         if bids and j % 2 == 1:
-            tgt = bids[(_seed(fid) % len(bids))]
-            if (tgt, fid) not in lay["conns"]:
-                lay["conns"].append((tgt, fid))
+            tgt = bids[_seed(f["_id"]) % len(bids)]
+            if (tgt, f["_id"]) not in lay["conns"]:
+                lay["conns"].append((tgt, f["_id"]))
     return lay
 
 
-def _center(rect):
-    x, y, w, h = rect
-    return (x + w / 2.0, y + h / 2.0)
+def _in(rect, x, y, pad=0):
+    rx, ry, rw, rh = rect
+    return rx - pad <= x <= rx + rw + pad and ry - pad <= y <= ry + rh + pad
 
 
-def hit_test(lay, x, y):
-    # nodes first (front-most), then connection endpoints handled via highlight
-    for nid, n in lay["nodes"].items():
-        rx, ry, rw, rh = n["rect"]
-        if rx <= x <= rx + rw and ry <= y <= ry + rh + 16:
-            return nid
+# ---------------------------------------------------------------------------
+# Interaction: what can be grabbed, and where a drag lands
+# ---------------------------------------------------------------------------
+def pick(lay, x, y):
+    """Return a grab descriptor for the draggable under the cursor, or None."""
+    for m in lay["mons"]:                         # a window inside a monitor
+        for win, r in m["wins"]:
+            if _in(r, x, y):
+                return {"kind": "win", "addr": win["addr"], "win": win,
+                        "from": "mon", "rect": r}
+    for f in lay["free"]:                          # a free floating window
+        if _in(f["rect"], x, y):
+            return {"kind": "win", "addr": f["win"]["addr"], "win": f["win"],
+                    "from": "free", "rect": f["rect"]}
+    for b in lay["boxes"]:                          # a whole inactive workspace
+        if _in(b["rect"], x, y, 14):
+            return {"kind": "box", "ws": b["box"]["ws"], "box": b["box"],
+                    "rect": b["rect"]}
     return None
+
+
+def hover_id(lay, x, y):
+    """Lightweight id under cursor for non-drag highlight."""
+    for f in lay["free"]:
+        if _in(f["rect"], x, y, 14):
+            return f["id"]
+    for b in lay["boxes"]:
+        if _in(b["rect"], x, y, 14):
+            return b["id"]
+    return None
+
+
+def drop_target(lay, x, y):
+    for m in lay["mons"]:
+        if _in(m["rect"], x, y):
+            return {"kind": "monitor", "mon": m["mon"], "id": m["id"]}
+    for b in lay["boxes"]:
+        if _in(b["rect"], x, y, 8):
+            return {"kind": "box", "ws": b["box"]["ws"], "id": b["id"]}
+    return {"kind": "canvas"}
 
 
 # ---------------------------------------------------------------------------
 # Render
 # ---------------------------------------------------------------------------
 def _text(cr, s, x, y, size, color, mono=False, bold=False, align="center"):
-    cr.select_font_face(
-        "monospace" if mono else "sans-serif",
-        cairo.FONT_SLANT_NORMAL,
-        cairo.FONT_WEIGHT_BOLD if bold else cairo.FONT_WEIGHT_NORMAL,
-    )
+    cr.select_font_face("monospace" if mono else "sans-serif",
+                        cairo.FONT_SLANT_NORMAL,
+                        cairo.FONT_WEIGHT_BOLD if bold else cairo.FONT_WEIGHT_NORMAL)
     cr.set_font_size(size)
     ext = cr.text_extents(s)
     if align == "center":
         tx = x - ext.width / 2 - ext.x_bearing
-    elif align == "left":
-        tx = x
-    else:
+    elif align == "right":
         tx = x - ext.width
-    ty = y - ext.y_bearing
+    else:
+        tx = x
     cr.set_source_rgb(*color)
-    cr.move_to(tx, ty)
+    cr.move_to(tx, y - ext.y_bearing)
     cr.show_text(s)
 
 
@@ -305,7 +340,7 @@ def _thumb_or_stub(cr, rect, win):
         cr.set_source_rgb(*WIN_FILL)
         cr.rectangle(x, y, w, h)
         cr.fill()
-        hb = max(8, h * 0.2)
+        hb = max(7, h * 0.2)
         cr.set_source_rgb(*win["color"])
         cr.rectangle(x, y, w, hb)
         cr.fill()
@@ -320,27 +355,12 @@ def _thumb_or_stub(cr, rect, win):
     cr.restore()
 
 
-def _window_tile(cr, rect, win, accent=False):
-    _thumb_or_stub(cr, rect, win)
-    x, y, w, h = rect
-    cr.set_source_rgb(*(ACCENT if accent else WIN_EDGE))
-    cr.set_line_width(1.5 if accent else 1)
-    cr.rectangle(x, y, w, h)
-    cr.stroke()
-
-
-def _tiled_windows(cr, container, windows, accent=False):
-    cx, cy, cw, ch = container
-    pad = 8
-    inx, iny, inw, inh = cx + pad, cy + pad, cw - 2 * pad, ch - 2 * pad
-    for win in windows:
-        rx, ry, rw, rh = win["rel"]
-        rect = (inx + rx * inw, iny + ry * inh,
-                max(16, rw * inw - 3), max(12, rh * inh - 3))
-        _thumb_or_stub(cr, rect, win)
+def _win_rects(cr, wins):
+    for win, r in wins:
+        _thumb_or_stub(cr, r, win)
         cr.set_source_rgb(*WIN_EDGE)
         cr.set_line_width(1)
-        cr.rectangle(*rect)
+        cr.rectangle(*r)
         cr.stroke()
 
 
@@ -351,10 +371,8 @@ def _dashed_empty(cr, rect):
     cr.set_dash([5, 5])
     cr.rectangle(x + 10, y + 10, w - 20, h - 20)
     cr.stroke()
-    cr.move_to(x + 10, y + 10)
-    cr.line_to(x + w - 10, y + h - 10)
-    cr.move_to(x + w - 10, y + 10)
-    cr.line_to(x + 10, y + h - 10)
+    cr.move_to(x + 10, y + 10); cr.line_to(x + w - 10, y + h - 10)
+    cr.move_to(x + w - 10, y + 10); cr.line_to(x + 10, y + h - 10)
     cr.stroke()
     cr.set_dash([])
 
@@ -362,32 +380,61 @@ def _dashed_empty(cr, rect):
 def _background(cr, W, H):
     cr.set_source_rgb(*BG)
     cr.paint()
-    # dot grid
-    step = 26
+    step = 23
     cr.set_source_rgb(*GRID)
     for gx in range(step, W, step):
         for gy in range(step, H, step):
-            cr.rectangle(gx, gy, 1.2, 1.2)
+            cr.rectangle(gx - 0.7, gy - 0.7, 1.5, 1.5)
     cr.fill()
-    # edge crosshair ticks
     cr.set_source_rgb(*TICK)
     cr.set_line_width(1)
-    for gx in range(0, W + 1, W // 4 if W >= 4 else W):
-        for ty in (8, H - 8):
+    nx = max(1, W // 5)
+    ny = max(1, H // 5)
+    for gx in range(0, W + 1, nx):
+        for ty in (9, H - 9):
             cr.move_to(gx - 6, ty); cr.line_to(gx + 6, ty)
             cr.move_to(gx, ty - 6); cr.line_to(gx, ty + 6)
-    for gy in range(0, H + 1, H // 4 if H >= 4 else H):
-        for tx in (8, W - 8):
+    for gy in range(0, H + 1, ny):
+        for tx in (9, W - 9):
             cr.move_to(tx - 6, gy); cr.line_to(tx + 6, gy)
             cr.move_to(tx, gy - 6); cr.line_to(tx, gy + 6)
     cr.stroke()
 
 
-def render(cr, lay, model, hover=None):
+def _ghost(cr, drag):
+    """Draw the dragged item following the cursor."""
+    x, y = drag["x"], drag["y"]
+    desc = drag["desc"]
+    cr.save()
+    cr.push_group()
+    if desc["kind"] == "win":
+        w, h = 110, 78
+        r = (x - w / 2, y - h / 2, w, h)
+        _thumb_or_stub(cr, r, desc["win"])
+        cr.set_source_rgb(*ACCENT)
+        cr.set_line_width(2)
+        cr.rectangle(*r)
+        cr.stroke()
+        _text(cr, desc["win"]["app"], x, y + h / 2 + 6, 12, CHARCOAL, mono=True)
+    else:
+        w, h = 120, 84
+        cr.set_source_rgb(*BOX_FILL)
+        cr.rectangle(x - w / 2, y - h / 2, w, h)
+        cr.fill()
+        cr.set_source_rgb(*ACCENT)
+        cr.set_line_width(2)
+        cr.rectangle(x - w / 2, y - h / 2, w, h)
+        cr.stroke()
+        _text(cr, desc["box"]["label"], x, y, 13, (0.9, 0.9, 0.9), mono=True)
+    cr.pop_group_to_source()
+    cr.paint_with_alpha(0.85)
+    cr.restore()
+
+
+def render(cr, lay, model, hover=None, drag=None):
     W, H = lay["W"], lay["H"]
     _background(cr, W, H)
 
-    # telemetry
     _text(cr, "ACTIVE NODES: %d" % model["active_count"], 16, 14, 13, TELEM,
           mono=True, align="left")
     _text(cr, "INACTIVE: %d" % model["inactive_count"], 16, 32, 13, TELEM,
@@ -395,25 +442,22 @@ def render(cr, lay, model, hover=None):
     _text(cr, "FIG.2  WORKSPACE TOPOLOGY", W - 16, H - 24, 12, TELEM,
           mono=True, align="right")
 
-    # adjacency for hover highlight
-    hi_lines = set()
+    target_id = drag["target"].get("id") if drag and drag.get("target") else None
+
+    hi = set()
     if hover:
         for a, b in lay["conns"]:
             if hover in (a, b):
-                hi_lines.add((a, b))
+                hi.add((a, b))
 
-    # connection lines (under nodes)
     for a, b in lay["conns"]:
-        na, nb = lay["nodes"].get(a), lay["nodes"].get(b)
-        if not na or not nb:
+        pa, pb = lay["_centers"].get(a), lay["_centers"].get(b)
+        if not pa or not pb:
             continue
-        pa, pb = _center(na["rect"]), _center(nb["rect"])
-        accent = (a, b) in hi_lines
+        accent = (a, b) in hi
         cr.set_source_rgb(*(ACCENT if accent else LINE))
         cr.set_line_width(1.4 if accent else 1)
-        cr.move_to(*pa)
-        cr.line_to(*pb)
-        cr.stroke()
+        cr.move_to(*pa); cr.line_to(*pb); cr.stroke()
         mid = ((pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2)
         for p in (pa, pb, mid):
             cr.set_source_rgb(*(ACCENT if accent else DOT))
@@ -421,41 +465,48 @@ def render(cr, lay, model, hover=None):
             cr.fill()
 
     # monitor row
-    for i, mb in enumerate(lay["mons"]):
-        x, y, w, h = mb["rect"]
-        mon = mb["mon"]
+    for m in lay["mons"]:
+        x, y, w, h = m["rect"]
+        mon = m["mon"]
+        is_t = target_id == m["id"]
         _text(cr, mon["label"], x + 2, y - 18, 12, ACCENT, mono=True, align="left")
         if mon["empty"]:
-            _dashed_empty(cr, mb["rect"])
+            _dashed_empty(cr, m["rect"])
         else:
-            _tiled_windows(cr, mb["rect"], mon["windows"])
+            _win_rects(cr, m["wins"])
+        if is_t:
+            cr.set_source_rgba(*ACCENT_FILL)
+            cr.rectangle(x, y, w, h); cr.fill()
         cr.set_source_rgb(*ACCENT)
-        cr.set_line_width(1.8)
-        cr.rectangle(x, y, w, h)
-        cr.stroke()
+        cr.set_line_width(2.6 if is_t else 1.8)
+        cr.rectangle(x, y, w, h); cr.stroke()
 
-    # inactive workspace boxes + free nodes
-    for nid, n in lay["nodes"].items():
-        x, y, w, h = n["rect"]
-        accent = (nid == hover)
-        if n["kind"] == "box":
-            b = n["data"]
-            cr.set_source_rgb(*BOX_FILL)
-            cr.rectangle(x, y, w, h)
-            cr.fill()
-            _tiled_windows(cr, n["rect"], b["windows"])
-            cr.set_source_rgb(*(ACCENT if accent else BOX_EDGE))
-            cr.set_line_width(2 if accent else 1.2)
-            cr.rectangle(x, y, w, h)
-            cr.stroke()
-            _text(cr, b["label"], x + w / 2, y + h + 6, 12, CHARCOAL, mono=True)
-        else:
-            f = n["data"]
-            _window_tile(cr, n["rect"], f, accent=accent)
-            _text(cr, f["app"], x + w / 2, y + h + 6, 12, CHARCOAL, mono=True)
+    # inactive workspace boxes
+    for b in lay["boxes"]:
+        x, y, w, h = b["rect"]
+        accent = (b["id"] == hover) or (b["id"] == target_id)
+        cr.set_source_rgb(*BOX_FILL)
+        cr.rectangle(x, y, w, h); cr.fill()
+        _win_rects(cr, b["wins"])
+        cr.set_source_rgb(*(ACCENT if accent else BOX_EDGE))
+        cr.set_line_width(2 if accent else 1.2)
+        cr.rectangle(x, y, w, h); cr.stroke()
+        _text(cr, b["box"]["label"], x + w / 2, y + h + 8, 12, CHARCOAL, mono=True)
+
+    # free floating nodes
+    for f in lay["free"]:
+        x, y, w, h = f["rect"]
+        accent = (f["id"] == hover)
+        _thumb_or_stub(cr, f["rect"], f["win"])
+        cr.set_source_rgb(*(ACCENT if accent else WIN_EDGE))
+        cr.set_line_width(1.6 if accent else 1)
+        cr.rectangle(x, y, w, h); cr.stroke()
+        _text(cr, f["win"]["app"], x + w / 2, y + h + 8, 12, CHARCOAL, mono=True)
+
+    if drag:
+        _ghost(cr, drag)
 
 
-# quick self-test when run directly with no data
 if __name__ == "__main__":
     surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, 1024, 1024)
     cr = cairo.Context(surf)

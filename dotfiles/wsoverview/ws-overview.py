@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
 """Network-graph workspace overview overlay.
 
-A full-screen gtk-layer-shell overlay (on the focused monitor) that draws the
-current Hyprland topology as a node graph: the three monitors up top with live
-tiled previews, inactive workspaces as dark boxes, floating windows as free
-nodes, joined by a charcoal web. Hovering a node highlights it and its links in
-red-orange.
+A full-screen gtk-layer-shell overlay (on the focused monitor) drawing the live
+Hyprland topology as a node graph: the three monitors up top with tiled
+previews, inactive workspaces as dark boxes, floating windows as free nodes,
+joined by a charcoal web. Hover highlights a node + its links in red-orange.
 
-Toggle with Super+Tab (single instance via PIDFILE). Esc or Super+Tab closes.
-The heavy lifting (model + drawing) lives in wsoverview_core; live window
-thumbnails come from thumb_capture / the thumb daemon.
+Drag-and-drop (live, via hyprctl):
+  * drag a free window or a window out of a monitor -> drop on a MONITOR to show
+    it there, on a WORKSPACE box to park it there, or on empty canvas to park it
+    on a fresh empty workspace.
+  * drag a whole inactive WORKSPACE box -> drop on a MONITOR to display it there.
+
+Toggle with Super+Tab (single instance via PIDFILE). Esc / Super+Tab closes.
 """
 import os
 import sys
 import json
+import time
 import signal
 import subprocess
 import gi
@@ -26,6 +30,7 @@ import wsoverview_core as core            # noqa: E402
 from thumb_capture import capture_visible, THUMBS  # noqa: E402
 
 PIDFILE = "/tmp/wsoverview/overview.pid"
+DEVNULL = subprocess.DEVNULL
 
 
 def hypr(cmd):
@@ -36,19 +41,32 @@ def hypr(cmd):
         return []
 
 
+def dispatch(*args):
+    try:
+        subprocess.run(["hyprctl", "dispatch", *[str(a) for a in args]],
+                       stdout=DEVNULL, stderr=DEVNULL, timeout=4)
+    except Exception:
+        pass
+
+
 def gather_model():
-    mons = hypr("monitors")
-    wss = hypr("workspaces")
-    clients = hypr("clients")
-    return core.build_model(mons, wss, clients, THUMBS), mons
+    return core.build_model(hypr("monitors"), hypr("workspaces"),
+                            hypr("clients"), THUMBS), hypr("monitors")
 
 
 def focused_monitor(mons):
     for m in mons:
         if m.get("focused"):
             return m
-    return mons[0] if mons else {"x": 0, "y": 0, "width": 1920, "height": 1080,
-                                 "scale": 1}
+    return mons[0] if mons else {"x": 0, "y": 0, "width": 1920, "height": 1080}
+
+
+def first_empty_ws():
+    used = {w.get("id") for w in hypr("workspaces") if w.get("windows", 0) > 0}
+    i = 1
+    while i in used:
+        i += 1
+    return i
 
 
 class Overview(Gtk.Window):
@@ -57,6 +75,7 @@ class Overview(Gtk.Window):
         self.model = model
         self.lay = None
         self.hover = None
+        self.drag = None
         self.mon = mon
 
         GtkLayerShell.init_for_window(self)
@@ -78,9 +97,12 @@ class Overview(Gtk.Window):
         self.area = Gtk.DrawingArea()
         self.add(self.area)
         self.area.set_events(Gdk.EventMask.POINTER_MOTION_MASK
-                             | Gdk.EventMask.BUTTON_PRESS_MASK)
+                             | Gdk.EventMask.BUTTON_PRESS_MASK
+                             | Gdk.EventMask.BUTTON_RELEASE_MASK)
         self.area.connect("draw", self.on_draw)
         self.area.connect("motion-notify-event", self.on_motion)
+        self.area.connect("button-press-event", self.on_press)
+        self.area.connect("button-release-event", self.on_release)
         self.connect("key-press-event", self.on_key)
 
     def _gdk_monitor(self, m):
@@ -97,35 +119,84 @@ class Overview(Gtk.Window):
             self.lay = core.layout(self.model, w, h)
 
     def on_draw(self, area, cr):
-        w = area.get_allocated_width()
-        h = area.get_allocated_height()
-        self._ensure_layout(w, h)
-        core.render(cr, self.lay, self.model, hover=self.hover)
+        self._ensure_layout(area.get_allocated_width(), area.get_allocated_height())
+        core.render(cr, self.lay, self.model, hover=self.hover, drag=self.drag)
         return False
 
     def on_motion(self, _w, e):
         if self.lay is None:
             return False
-        hit = core.hit_test(self.lay, e.x, e.y)
+        if self.drag:
+            self.drag["x"], self.drag["y"] = e.x, e.y
+            self.drag["target"] = core.drop_target(self.lay, e.x, e.y)
+            self.area.queue_draw()
+            return True
+        hit = core.hover_id(self.lay, e.x, e.y)
         if hit != self.hover:
             self.hover = hit
             self.area.queue_draw()
         return True
 
+    def on_press(self, _w, e):
+        if self.lay is None or e.button != 1:
+            return False
+        desc = core.pick(self.lay, e.x, e.y)
+        if desc:
+            self.drag = {"desc": desc, "x": e.x, "y": e.y, "target": None}
+            self.hover = None
+            self.area.queue_draw()
+        return True
+
+    def on_release(self, _w, e):
+        if not self.drag:
+            return False
+        target = core.drop_target(self.lay, e.x, e.y)
+        desc = self.drag["desc"]
+        self.drag = None
+        self.apply_drop(desc, target)
+        self.refresh()
+        return True
+
+    def apply_drop(self, desc, target):
+        tk = target["kind"]
+        if desc["kind"] == "win":
+            addr = desc["addr"]
+            if not addr:
+                return
+            if tk == "monitor":
+                dispatch("movetoworkspacesilent",
+                         "%s,address:%s" % (target["mon"]["ws"], addr))
+            elif tk == "box":
+                dispatch("movetoworkspacesilent",
+                         "%s,address:%s" % (target["ws"], addr))
+            elif tk == "canvas":
+                dispatch("movetoworkspacesilent",
+                         "%s,address:%s" % (first_empty_ws(), addr))
+        elif desc["kind"] == "box":
+            if tk == "monitor":
+                ws, name = desc["ws"], target["mon"]["name"]
+                dispatch("moveworkspacetomonitor", ws, name)
+                dispatch("focusmonitor", name)
+                dispatch("workspace", ws)
+
+    def refresh(self):
+        time.sleep(0.06)               # let hyprctl settle
+        self.model, _ = gather_model()
+        self.lay = None
+        self.hover = None
+        self.area.queue_draw()
+
     def on_key(self, _w, e):
-        name = Gdk.keyval_name(e.keyval)
-        if name in ("Escape", "Tab", "ISO_Left_Tab"):
+        if Gdk.keyval_name(e.keyval) in ("Escape", "Tab", "ISO_Left_Tab"):
             Gtk.main_quit()
         return True
 
 
 def main():
     os.makedirs(os.path.dirname(PIDFILE), exist_ok=True)
-    # Single-instance toggle: a second launch closes the open overview.
     if os.path.exists(PIDFILE):
         try:
-            old = int(open(PIDFILE).read().strip())
-            os.kill(old, signal.SIGTERM)
+            os.kill(int(open(PIDFILE).read().strip()), signal.SIGTERM)
             os.remove(PIDFILE)
             return
         except (ValueError, ProcessLookupError):
@@ -134,16 +205,13 @@ def main():
             except OSError:
                 pass
 
-    # Refresh thumbnails for currently-visible windows BEFORE we map our own
-    # layer (otherwise grim would capture this overlay instead of the windows).
     try:
-        capture_visible()
+        capture_visible()              # fresh thumbs before our layer maps
     except Exception:
         pass
 
     model, mons = gather_model()
     mon = focused_monitor(mons)
-
     with open(PIDFILE, "w") as f:
         f.write(str(os.getpid()))
     try:
