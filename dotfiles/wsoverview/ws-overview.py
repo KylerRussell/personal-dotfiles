@@ -27,10 +27,11 @@ from gi.repository import Gtk, Gdk, GtkLayerShell
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wsoverview_core as core            # noqa: E402
-from thumb_capture import capture_visible, THUMBS  # noqa: E402
+from thumb_capture import capture_visible, THUMBS, LOCK  # noqa: E402
 
 PIDFILE = "/tmp/wsoverview/overview.pid"
 DEVNULL = subprocess.DEVNULL
+SCRATCH = "special:wsov"        # temp stash so a re-insert always re-tiles
 
 
 def hypr(cmd):
@@ -181,9 +182,12 @@ class Overview(Gtk.Window):
                 ws = target["mon"]["ws"]
                 if zone and zone.get("addr") and zone.get("split") \
                         and zone["addr"] != addr:
-                    # tile next to the highlighted window on the chosen side.
+                    # Tile next to the highlighted window on the chosen side.
+                    # Stash first so the re-insert always re-tiles, even when the
+                    # window is already on this workspace (intra-monitor move).
                     # force_split: 1 = new window left/top, 2 = right/bottom.
                     fs = 1 if zone["split"] in ("l", "t") else 2
+                    dispatch("movetoworkspacesilent", "%s,address:%s" % (SCRATCH, addr))
                     dispatch("focuswindow", "address:%s" % zone["addr"])
                     keyword("dwindle:force_split", fs)
                     dispatch("movetoworkspacesilent", "%s,address:%s" % (ws, addr))
@@ -221,7 +225,11 @@ def main():
     if os.path.exists(PIDFILE):
         try:
             os.kill(int(open(PIDFILE).read().strip()), signal.SIGTERM)
-            os.remove(PIDFILE)
+            for f in (PIDFILE, LOCK):          # closing -> release both
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
             return
         except (ValueError, ProcessLookupError):
             try:
@@ -230,7 +238,11 @@ def main():
                 pass
 
     try:
-        capture_visible()              # fresh thumbs before our layer maps
+        os.remove(LOCK)                        # clear any stale lock
+    except OSError:
+        pass
+    try:
+        capture_visible()                      # fresh thumbs before our layer maps
     except Exception:
         pass
 
@@ -238,16 +250,18 @@ def main():
     mon = focused_monitor(mons)
     with open(PIDFILE, "w") as f:
         f.write(str(os.getpid()))
+    open(LOCK, "w").close()                     # pause the thumbnail daemon
     try:
         win = Overview(model, mon)
         win.connect("destroy", Gtk.main_quit)
         win.show_all()
         Gtk.main()
     finally:
-        try:
-            os.remove(PIDFILE)
-        except OSError:
-            pass
+        for f in (PIDFILE, LOCK):
+            try:
+                os.remove(f)
+            except OSError:
+                pass
 
 
 if __name__ == "__main__":

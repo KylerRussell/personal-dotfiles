@@ -13,6 +13,10 @@ import json
 import subprocess
 
 THUMBS = "/tmp/wsoverview/thumbs"
+# While this lock exists the overview overlay is on screen, so grim would
+# capture the overlay itself instead of the windows. Both the daemon and the
+# overlay's own refresh skip capturing while it's held.
+LOCK = "/tmp/wsoverview/active"
 
 
 def _json(cmd):
@@ -25,6 +29,8 @@ def _json(cmd):
 
 
 def capture_visible(thumbs=THUMBS):
+    if os.path.exists(LOCK):            # overview is open -> don't snapshot it
+        return 0
     os.makedirs(thumbs, exist_ok=True)
     mons = _json("monitors")
     clients = _json("clients")

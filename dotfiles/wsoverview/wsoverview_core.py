@@ -15,6 +15,8 @@ import math
 import hashlib
 import cairo
 
+REV = "r4-zones"   # bumped each deploy so the overlay shows what's running
+
 # ---- Anduril palette -------------------------------------------------------
 BG        = (0.906, 0.894, 0.871)
 GRID      = (0.72, 0.71, 0.68)      # dot grid (denser + a touch darker)
@@ -485,6 +487,7 @@ def render(cr, lay, model, hover=None, drag=None):
           mono=True, align="left")
     _text(cr, "FIG.2  WORKSPACE TOPOLOGY", W - 16, H - 24, 12, TELEM,
           mono=True, align="right")
+    _text(cr, "BUILD %s" % REV, 16, 50, 11, TELEM, mono=True, align="left")
 
     target_id = drag["target"].get("id") if drag and drag.get("target") else None
 
