@@ -136,7 +136,7 @@ fi
 mkdir -p "$TARGET_DIR"
 
 # Loop through configurations and generate absolute links
-for config in hypr kitty rofi nwg-wrapper radial; do
+for config in hypr kitty rofi nwg-wrapper radial wsoverview; do
     if [ -d "$REPO_DIR/$config" ]; then
         echo "Mapping: $config -> $TARGET_DIR/$config"
         # Remove old configs safely
@@ -148,7 +148,8 @@ done
 # HUD scripts must be executable
 chmod +x "$TARGET_DIR"/nwg-wrapper/*.sh "$TARGET_DIR"/nwg-wrapper/hud-config.py \
          "$TARGET_DIR"/nwg-wrapper/presets/lines/*/*.sh \
-         "$TARGET_DIR"/radial/*.sh "$TARGET_DIR"/radial/*.py 2>/dev/null
+         "$TARGET_DIR"/radial/*.sh "$TARGET_DIR"/radial/*.py \
+         "$TARGET_DIR"/wsoverview/*.py 2>/dev/null
 
 # Copy (do NOT symlink) the update script to the home directory. A symlink here
 # points back into the repo tree that update.sh itself overwrites while running,
