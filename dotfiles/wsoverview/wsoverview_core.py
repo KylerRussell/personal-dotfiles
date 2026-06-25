@@ -185,11 +185,12 @@ def layout(model, W, H):
     # --- monitor row: true aspect, scaled down, left-aligned ---
     gap = 26
     mb_h = 178
-    x = margin
     top_y = 72
-    for mon in model["monitors"][:3]:
-        aspect = (mon["w"] / mon["h"]) if mon["h"] else (16 / 9)
-        mb_w = mb_h * aspect
+    mons = model["monitors"][:3]
+    widths = [mb_h * ((m["w"] / m["h"]) if m["h"] else 16 / 9) for m in mons]
+    total = (sum(widths) + gap * (len(widths) - 1)) if widths else 0
+    x = max(margin, (W - total) / 2)               # centre the monitor row
+    for mon, mb_w in zip(mons, widths):
         rect = (x, top_y, mb_w, mb_h)
         wins = _place_tiled(rect, mon["windows"])
         lay["mons"].append({"id": mon["id"], "rect": rect, "mon": mon, "wins": wins})
