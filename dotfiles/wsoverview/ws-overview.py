@@ -49,6 +49,14 @@ def dispatch(*args):
         pass
 
 
+def keyword(*args):
+    try:
+        subprocess.run(["hyprctl", "keyword", *[str(a) for a in args]],
+                       stdout=DEVNULL, stderr=DEVNULL, timeout=4)
+    except Exception:
+        pass
+
+
 def gather_model():
     return core.build_model(hypr("monitors"), hypr("workspaces"),
                             hypr("clients"), THUMBS), hypr("monitors")
@@ -62,7 +70,11 @@ def focused_monitor(mons):
 
 
 def first_empty_ws():
+    # smallest positive workspace that has no windows AND isn't shown on a
+    # monitor right now -> a truly inactive (parked) workspace.
+    active = {m.get("activeWorkspace", {}).get("id") for m in hypr("monitors")}
     used = {w.get("id") for w in hypr("workspaces") if w.get("windows", 0) > 0}
+    used |= active
     i = 1
     while i in used:
         i += 1
@@ -129,6 +141,7 @@ class Overview(Gtk.Window):
         if self.drag:
             self.drag["x"], self.drag["y"] = e.x, e.y
             self.drag["target"] = core.drop_target(self.lay, e.x, e.y)
+            self.drag["zone"] = core.drop_zone(self.lay, e.x, e.y)
             self.area.queue_draw()
             return True
         hit = core.hover_id(self.lay, e.x, e.y)
@@ -151,21 +164,32 @@ class Overview(Gtk.Window):
         if not self.drag:
             return False
         target = core.drop_target(self.lay, e.x, e.y)
+        zone = core.drop_zone(self.lay, e.x, e.y)
         desc = self.drag["desc"]
         self.drag = None
-        self.apply_drop(desc, target)
+        self.apply_drop(desc, target, zone)
         self.refresh()
         return True
 
-    def apply_drop(self, desc, target):
+    def apply_drop(self, desc, target, zone=None):
         tk = target["kind"]
         if desc["kind"] == "win":
             addr = desc["addr"]
             if not addr:
                 return
             if tk == "monitor":
-                dispatch("movetoworkspacesilent",
-                         "%s,address:%s" % (target["mon"]["ws"], addr))
+                ws = target["mon"]["ws"]
+                if zone and zone.get("addr") and zone.get("split") \
+                        and zone["addr"] != addr:
+                    # tile next to the highlighted window on the chosen side.
+                    # force_split: 1 = new window left/top, 2 = right/bottom.
+                    fs = 1 if zone["split"] in ("l", "t") else 2
+                    dispatch("focuswindow", "address:%s" % zone["addr"])
+                    keyword("dwindle:force_split", fs)
+                    dispatch("movetoworkspacesilent", "%s,address:%s" % (ws, addr))
+                    keyword("dwindle:force_split", 0)
+                else:
+                    dispatch("movetoworkspacesilent", "%s,address:%s" % (ws, addr))
             elif tk == "box":
                 dispatch("movetoworkspacesilent",
                          "%s,address:%s" % (target["ws"], addr))

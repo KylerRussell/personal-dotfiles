@@ -25,6 +25,7 @@ LINE      = (0.30, 0.30, 0.31)
 DOT       = (0.24, 0.24, 0.25)
 ACCENT    = (0.851, 0.318, 0.184)
 ACCENT_FILL = (0.851, 0.318, 0.184, 0.12)
+ZONE_FILL = (0.851, 0.318, 0.184, 0.30)   # placement zone highlight
 BOX_FILL  = (0.227, 0.227, 0.239)
 BOX_EDGE  = (0.15, 0.15, 0.16)
 WIN_FILL  = (0.149, 0.149, 0.165)
@@ -295,6 +296,48 @@ def drop_target(lay, x, y):
     return {"kind": "canvas"}
 
 
+def drop_zone(lay, x, y):
+    """Where inside a monitor a dragged window would tile, mimicking dwindle.
+
+    A new window splits the tile under the cursor: wide tiles split left/right,
+    tall tiles split top/bottom, and the cursor picks the half. Empty monitors
+    take the whole area. Returns the highlight rect + the window to split + the
+    side (l/r/t/b), or None when the cursor isn't over a monitor.
+    """
+    for m in lay["mons"]:
+        if not _in(m["rect"], x, y):
+            continue
+        bx, by, bw, bh = m["rect"]
+        pad = 8
+        inner = (bx + pad, by + pad, bw - 2 * pad, bh - 2 * pad)
+        wins = m["wins"]
+        if not wins:                                  # empty monitor
+            return {"mon": m["mon"], "id": m["id"], "rect": inner,
+                    "addr": None, "split": None}
+        target = None
+        for win, r in wins:
+            if _in(r, x, y):
+                target = (win, r)
+                break
+        if target is None:
+            target = min(wins, key=lambda wr: (x - (wr[1][0] + wr[1][2] / 2)) ** 2
+                         + (y - (wr[1][1] + wr[1][3] / 2)) ** 2)
+        win, (tx, ty, tw, th) = target
+        if tw >= th:                                  # wide -> split L/R
+            if x < tx + tw / 2:
+                rect, side = (tx, ty, tw / 2, th), "l"
+            else:
+                rect, side = (tx + tw / 2, ty, tw / 2, th), "r"
+        else:                                         # tall -> split T/B
+            if y < ty + th / 2:
+                rect, side = (tx, ty, tw, th / 2), "t"
+            else:
+                rect, side = (tx, ty + th / 2, tw, th / 2), "b"
+        return {"mon": m["mon"], "id": m["id"], "rect": rect,
+                "addr": win["addr"], "split": side}
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Render
 # ---------------------------------------------------------------------------
@@ -466,6 +509,7 @@ def render(cr, lay, model, hover=None, drag=None):
             cr.fill()
 
     # monitor row
+    zone = drag.get("zone") if drag else None
     for m in lay["mons"]:
         x, y, w, h = m["rect"]
         mon = m["mon"]
@@ -475,7 +519,14 @@ def render(cr, lay, model, hover=None, drag=None):
             _dashed_empty(cr, m["rect"])
         else:
             _win_rects(cr, m["wins"])
-        if is_t:
+        if zone and zone.get("id") == m["id"]:        # show where it tiles
+            zx, zy, zw, zh = zone["rect"]
+            cr.set_source_rgba(*ZONE_FILL)
+            cr.rectangle(zx, zy, zw, zh); cr.fill()
+            cr.set_source_rgb(*ACCENT)
+            cr.set_line_width(2)
+            cr.rectangle(zx, zy, zw, zh); cr.stroke()
+        elif is_t:
             cr.set_source_rgba(*ACCENT_FILL)
             cr.rectangle(x, y, w, h); cr.fill()
         cr.set_source_rgb(*ACCENT)
